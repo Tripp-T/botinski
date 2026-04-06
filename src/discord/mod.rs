@@ -32,11 +32,9 @@ pub async fn main(state: AppState) -> Result<()> {
         .context("Failed to create discord client")?;
 
     let shard_manager = client.shard_manager.clone();
-    let shutdown_rx = state.register_shutdown_callback().await;
+    let shutdown_token = state.shutdown_token.clone();
     tokio::spawn(async move {
-        if let Err(e) = shutdown_rx.await {
-            error!("failed to receive shutdown signal: {e}")
-        };
+        shutdown_token.cancelled().await;
         shard_manager.shutdown_all().await;
     });
 

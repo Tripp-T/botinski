@@ -3,16 +3,12 @@ use {
     anyhow::{Context, Result, bail},
     clap::Parser,
     serde::{Deserialize, Serialize},
-    std::{
-        net::SocketAddr,
-        path::PathBuf,
-        sync::{Arc, atomic::AtomicBool},
-    },
+    std::{net::SocketAddr, path::PathBuf, sync::Arc},
     tokio::{
         signal,
-        sync::{Mutex, oneshot},
         task::{AbortHandle, JoinSet},
     },
+    tokio_util::sync::CancellationToken,
     tracing::{debug, error, info},
     tracing_subscriber::EnvFilter,
 };
@@ -47,38 +43,23 @@ type AppState = Arc<AppStateInner>;
 struct AppStateInner {
     config: ConfigData,
     opts: Opts,
-    shutdown_initiated: AtomicBool,
-    shutdown_callbacks: Mutex<Vec<oneshot::Sender<()>>>,
+    shutdown_token: CancellationToken,
 }
 impl AppStateInner {
     pub async fn new(opts: Opts) -> Result<Self> {
         Ok(AppStateInner {
             config: ConfigData::load_from_file(&opts.config).context("failed to load config")?,
             opts,
-            shutdown_initiated: AtomicBool::default(),
-            shutdown_callbacks: Mutex::default(),
+            shutdown_token: CancellationToken::new(),
         })
     }
-    pub async fn register_shutdown_callback(&self) -> oneshot::Receiver<()> {
-        let (tx, rx) = oneshot::channel();
-        self.shutdown_callbacks.lock().await.push(tx);
-        rx
-    }
     pub async fn shutdown(&self) -> Result<()> {
-        let shutdown_previously_initiated = self
-            .shutdown_initiated
-            .swap(true, std::sync::atomic::Ordering::Acquire);
-        if shutdown_previously_initiated {
+        if self.shutdown_token.is_cancelled() {
             debug!("Shutdown called multiple times, ignoring subsequent call");
             return Ok(());
         }
+        self.shutdown_token.cancel();
 
-        let mut has_failed_to_send_shutdown = false;
-        for signal in self.shutdown_callbacks.lock().await.drain(..) {
-            if !signal.is_closed() && signal.send(()).is_err() {
-                has_failed_to_send_shutdown = true;
-            }
-        }
         // Save config if it was modified
         if self.config.has_been_modified {
             self.config
@@ -86,11 +67,7 @@ impl AppStateInner {
                 .context("failed to save modified config")?;
         }
 
-        if has_failed_to_send_shutdown {
-            bail!("Failed to send shutdown signal to one or more threads")
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 }
 
@@ -155,8 +132,6 @@ where
 }
 
 async fn shutdown_signal(state: AppState) -> Result<()> {
-    let app_shutdown_signal = state.register_shutdown_callback().await;
-
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -174,7 +149,7 @@ async fn shutdown_signal(state: AppState) -> Result<()> {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = app_shutdown_signal => {
+        _ = state.shutdown_token.cancelled() => {
             info!("Received app shutdown signal");
             }
         r = ctrl_c => {

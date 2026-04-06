@@ -15,6 +15,7 @@ strum = { version = "0.28.0", features = ["derive"] }
 test-log = "0.2.19"
 thiserror = "2.0.18"
 tokio = { version = "1.51.0", features = ["full"] }
+tokio-util = "0.7.18"
 toml = "1.1.2"
 tower = { version = "0.5.3", features = ["full"] }
 tower-http = { version = "0.6.8", features = ["fs", "full"] }

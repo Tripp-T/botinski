@@ -4,13 +4,11 @@ use {
     axum::{Router, extract::State, http::StatusCode, response::IntoResponse},
     tower::ServiceBuilder,
     tower_http::ServiceBuilderExt,
-    tracing::{error, info},
+    tracing::info,
 };
 
 async fn await_shutdown_signal(state: AppState) {
-    if let Err(e) = state.register_shutdown_callback().await.await {
-        error!("Failed to await shutdown signal: {e}")
-    };
+    state.shutdown_token.cancelled().await
 }
 
 pub async fn main(state: AppState) -> Result<()> {
