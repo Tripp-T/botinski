@@ -1,26 +1,37 @@
 use {
-    crate::AppState,
+    crate::{
+        AppState,
+        discord::commands::{CommandT, ENABLED_COMMANDS},
+    },
     anyhow::{Context as AnyhowContext, Result},
     serenity::{
         Client,
-        all::{Context, EventHandler, GatewayIntents, Message, Ready},
+        all::{
+            Context, CreateInteractionResponse, CreateInteractionResponseMessage, EventHandler,
+            GatewayIntents, GuildId, Interaction, Message, Ready,
+        },
         async_trait,
     },
-    tracing::{error, info},
+    std::sync::LazyLock,
+    tracing::{debug, error, info},
 };
 
-pub async fn main(state: AppState) -> Result<()> {
-    let intents = GatewayIntents::GUILD_MESSAGES
-        | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT;
+mod commands;
 
-    let mut client = Client::builder(&state.opts.discord_token, intents)
-        .event_handler(Handler)
+static INTENTS: LazyLock<GatewayIntents> = LazyLock::new(|| {
+    GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::DIRECT_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT
+});
+
+pub async fn main(state: AppState) -> Result<()> {
+    let handler = Handler(state.clone());
+    let mut client = Client::builder(&state.opts.discord_token, *INTENTS)
+        .event_handler(handler)
         .await
         .context("Failed to create discord client")?;
 
     let shard_manager = client.shard_manager.clone();
-
     let shutdown_rx = state.register_shutdown_callback().await;
     tokio::spawn(async move {
         if let Err(e) = shutdown_rx.await {
@@ -29,34 +40,64 @@ pub async fn main(state: AppState) -> Result<()> {
         shard_manager.shutdown_all().await;
     });
 
-    client.start().await.context("Discord client error:")
+    client.start().await.context("client error")
 }
 
-struct Handler;
+struct Handler(AppState);
 
 #[async_trait]
 impl EventHandler for Handler {
-    // Set a handler for the `message` event. This is called whenever a new message is received.
-    //
-    // Event handlers are dispatched through a threadpool, and so multiple events can be
-    // dispatched simultaneously.
-    async fn message(&self, ctx: Context, msg: Message) {
-        if msg.content == "!ping" {
-            // Sending a message can fail, due to a network error, an authentication error, or lack
-            // of permissions to post in the channel, so log to stdout when some error happens,
-            // with a description of it.
-            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
-                error!("Error sending message: {why:?}");
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::Command(command) = interaction {
+            println!("Received command interaction: {command:#?}");
+
+            let content = match ENABLED_COMMANDS
+                .iter()
+                .find(|c| c.name().eq_ignore_ascii_case(&command.data.name))
+            {
+                Some(cmd) => Some(cmd.run(&command.data.options()).await),
+                None => Some("Not Implemented :(".to_string()),
+            };
+
+            if let Some(content) = content {
+                let data = CreateInteractionResponseMessage::new().content(content);
+                let builder = CreateInteractionResponse::Message(data);
+                if let Err(why) = command.create_response(&ctx.http, builder).await {
+                    println!("Cannot respond to slash command: {why}");
+                }
             }
         }
     }
+
+    async fn message(&self, _: Context, _: Message) {}
 
     // Set a handler to be called on the `ready` event. This is called when a shard is booted, and
     // a READY payload is sent by Discord. This payload contains data like the current user's guild
     // Ids, current user data, private channels, and more.
     //
     // In this case, just print what the current user's username is.
-    async fn ready(&self, _: Context, ready: Ready) {
-        info!("{} is connected!", ready.user.name);
+    async fn ready(&self, ctx: Context, ready: Ready) {
+        let primary_guild = GuildId::new(self.0.config.discord.primary_guild_id);
+
+        let commands = primary_guild
+            .set_commands(
+                &ctx.http,
+                ENABLED_COMMANDS
+                    .iter()
+                    .map(|c| c.register())
+                    .collect::<Vec<_>>(),
+            )
+            .await;
+        match commands {
+            Ok(c) => debug!("Registered {} slash command(s)", c.len()),
+            Err(e) => error!("Failed to register slash commands: {e}"),
+        }
+
+        info!("Connected to Discord as '{}'", ready.user.name);
+        info!(
+            "Invite URL: https://discord.com/oauth2/authorize?client_id={}&scope=bot&permissions={}",
+            ready.application.id,
+            INTENTS.bits()
+        )
     }
 }

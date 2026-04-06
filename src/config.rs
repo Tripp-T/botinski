@@ -6,6 +6,8 @@ use super::*;
 pub struct ConfigData {
     #[serde(skip, default)]
     pub has_been_modified: bool,
+
+    pub discord: DiscordConfigData,
 }
 impl ConfigData {
     pub fn load_from_file(path: &PathBuf) -> anyhow::Result<Self> {
@@ -14,4 +16,9 @@ impl ConfigData {
     pub fn write_to_file(&self, path: &PathBuf) -> anyhow::Result<()> {
         write_file(path, &self)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DiscordConfigData {
+    pub primary_guild_id: u64,
 }
