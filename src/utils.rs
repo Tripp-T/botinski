@@ -1,6 +1,11 @@
-use anyhow::{Context, bail};
-use serde::{Serialize, de::DeserializeOwned};
-use std::{io::BufReader, path::Path};
+use {
+    anyhow::{Context, bail},
+    serde::{Serialize, de::DeserializeOwned},
+    std::{
+        io::{BufReader, Write},
+        path::Path,
+    },
+};
 
 enum FileHandler {
     Json,
@@ -48,7 +53,11 @@ impl FileHandler {
         }?;
         let destination_path = path.as_ref();
         let tmp_path = destination_path.with_extension("tmp");
-        std::fs::write(&tmp_path, data).context("failed to write data")?;
+        let mut tmp_file = std::fs::File::open(&tmp_path).context("failed to oepn tmp file")?;
+        tmp_file
+            .write(data.as_bytes())
+            .context("failed to write data")?;
+        tmp_file.sync_all().context("failed to sync data write")?;
         std::fs::rename(tmp_path, destination_path).context("failed to write data")
     }
 }
