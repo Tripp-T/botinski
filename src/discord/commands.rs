@@ -37,3 +37,22 @@ impl CommandT for Ping {
         "Pong!".into()
     }
 }
+
+#[test_log::test]
+fn no_duplicate_commands() {
+    use {std::collections::HashSet, tracing::error};
+    let mut seen = HashSet::new();
+
+    let mut has_failed = false;
+    for cmd in super::ENABLED_COMMANDS.iter() {
+        let is_new_value = seen.insert(cmd.name());
+        if !is_new_value {
+            error!(
+                "command with name '{}' has been seen more than once",
+                cmd.name()
+            );
+            has_failed = true;
+        }
+    }
+    assert!(!has_failed)
+}
