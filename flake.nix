@@ -24,8 +24,14 @@
                 (import inputs.rust-overlay)
                 (final: prev: {
                   rust-toolchain = prev.rust-bin.stable.latest.default.override {
-                   targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
-                   extensions = [ "rust-src" "rustfmt" ];
+                    targets = [
+                      "x86_64-unknown-linux-gnu"
+                      "wasm32-unknown-unknown"
+                    ];
+                    extensions = [
+                      "rust-src"
+                      "rustfmt"
+                    ];
                   };
                 })
               ];
@@ -48,7 +54,7 @@
               cargo-watch
             ];
             env = {
-              RUST_LOG = "debug";
+              RUST_LOG = "botinski=debug";
             };
           };
         }

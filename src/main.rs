@@ -11,24 +11,36 @@ use {
     tokio::{
         signal,
         sync::{Mutex, oneshot},
-        task::JoinSet,
+        task::{AbortHandle, JoinSet},
     },
     tracing::{debug, error, info},
     tracing_subscriber::EnvFilter,
 };
 
 mod config;
+mod discord;
 mod http;
 mod utils;
 
 #[derive(Parser, Debug)]
 struct Opts {
+    // General
     #[clap(short, long, env = "CONFIG_PATH")]
     /// Path to the configuration file
     config: PathBuf,
+
+    // HTTP
     #[clap(long, env = "HTTP_ADDR", default_value = "127.0.0.1:3000")]
     /// Address and port the http server should bind to
     http_addr: SocketAddr,
+
+    // Discord
+    #[clap(long, env = "DISCORD_TOKEN")]
+    discord_token: String,
+    #[clap(long, env = "DISCORD_CLIENT_ID")]
+    discord_client_id: String,
+    #[clap(long, env = "DISCORD_CLIENT_SECRET")]
+    discord_client_secret: String,
 }
 
 type AppState = Arc<AppStateInner>;
@@ -91,16 +103,21 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     let state: AppState = Arc::new(AppStateInner::new(opts).await?);
 
-    let mut threads = JoinSet::new();
-    threads.spawn(shutdown_signal(state.clone()));
-    threads.spawn(http::main(state.clone()));
+    let mut thread_pool = JoinSet::new();
+    wrap_thread(
+        &mut thread_pool,
+        shutdown_signal(state.clone()),
+        "signal listener",
+    );
+    wrap_thread(&mut thread_pool, http::main(state.clone()), "HTTP");
+    wrap_thread(&mut thread_pool, discord::main(state.clone()), "Discord");
 
     let mut threads_with_error = 0usize;
-    while let Some(thread_result) = threads.join_next().await {
+    while let Some(thread_result) = thread_pool.join_next().await {
         match thread_result {
-            Ok(Ok(())) => continue,
-            Ok(Err(e)) => {
-                error!("thread exited with error: {e}");
+            Ok((name, Ok(()))) => info!("thread '{name}' exited cleanly"),
+            Ok((name, Err(e))) => {
+                error!("thread '{name}' exited with error: {e}");
                 threads_with_error += 1;
                 if let Err(e) = state.shutdown().await {
                     error!("{e}")
@@ -117,11 +134,24 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
-    if threads_with_error.gt(&0) {
-        bail!("{threads_with_error} returned an error")
+    if threads_with_error > 0 {
+        bail!("{threads_with_error} thread(s) returned an error")
     } else {
         Ok(())
     }
+}
+
+fn wrap_thread<F, S: Into<String>>(
+    thread_pool: &mut JoinSet<(String, Result<()>)>,
+    thread: F,
+    name: S,
+) -> AbortHandle
+where
+    F: Future<Output = Result<()>>,
+    F: Send + 'static,
+{
+    let name = name.into();
+    thread_pool.spawn(async { (name, thread.await) })
 }
 
 async fn shutdown_signal(state: AppState) -> Result<()> {

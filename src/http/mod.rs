@@ -1,10 +1,14 @@
-use crate::*;
-use axum::{
-    Router, debug_handler, extract::State, http::StatusCode, response::IntoResponse, routing::get,
+use {
+    crate::AppState,
+    anyhow::{Context, Result},
+    axum::{Router, extract::State, http::StatusCode, response::IntoResponse},
+    tower::ServiceBuilder,
+    tower_http::ServiceBuilderExt,
+    tracing::{error, info},
 };
 
-async fn shutdown_signal(signal: oneshot::Receiver<()>) {
-    if let Err(e) = signal.await {
+async fn await_shutdown_signal(state: AppState) {
+    if let Err(e) = state.register_shutdown_callback().await.await {
         error!("Failed to await shutdown signal: {e}")
     };
 }
@@ -17,15 +21,15 @@ pub async fn main(state: AppState) -> Result<()> {
     axum::serve(
         listener,
         Router::new()
-            .route("/", get(response_not_found))
+            .fallback(response_not_found)
+            .layer(ServiceBuilder::new().compression().trace_for_http())
             .with_state(state.clone()),
     )
-    .with_graceful_shutdown(shutdown_signal(state.register_shutdown_callback().await))
+    .with_graceful_shutdown(await_shutdown_signal(state))
     .await
     .context("HTTP server failed to run")
 }
 
-#[debug_handler]
 async fn response_not_found(_: State<AppState>) -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "Not Found")
 }
