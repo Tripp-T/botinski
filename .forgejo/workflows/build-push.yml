@@ -32,7 +32,7 @@ jobs:
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           restore-keys: |
-                    nix-${{ runner.os }}-
+            nix-${{ runner.os }}-
 
       - name: Build Docker image via Nix Flake
         run: nix build .#docker
