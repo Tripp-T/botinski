@@ -26,7 +26,7 @@ struct Opts {
     #[clap(short, long, env = "CONFIG_PATH")]
     /// Path to the configuration file
     config: PathBuf,
-    #[clap(env = "DATABASE_URL")]
+    #[clap(long, env = "DATABASE_URL")]
     /// URL to use to connect to the DB
     database_url: String,
 
