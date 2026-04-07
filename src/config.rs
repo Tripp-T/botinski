@@ -1,12 +1,11 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-
-use serenity::all::{RoleId, UserId};
-use tokio::sync::RwLock;
-use tracing::warn;
-
-use crate::utils::{load_file, write_file};
-
-use super::*;
+use {
+    super::*,
+    crate::utils::{load_file, write_file},
+    serenity::all::{RoleId, UserId},
+    std::sync::atomic::{AtomicBool, Ordering},
+    tokio::sync::RwLock,
+    tracing::warn,
+};
 
 pub struct ConfigManager {
     data: RwLock<ConfigData>,
