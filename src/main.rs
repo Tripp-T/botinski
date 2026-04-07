@@ -17,6 +17,7 @@ mod config;
 mod db;
 mod discord;
 mod http;
+mod models;
 mod utils;
 
 #[derive(Parser, Debug)]

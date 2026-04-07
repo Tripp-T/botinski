@@ -1,9 +1,9 @@
-use std::ops::Deref;
-
-use anyhow::Context;
-use sqlx::{Pool, Sqlite, sqlite::SqlitePoolOptions};
-
-use crate::Opts;
+use {
+    crate::Opts,
+    anyhow::Context,
+    sqlx::{Pool, Sqlite, sqlite::SqlitePoolOptions},
+    std::ops::Deref,
+};
 
 pub struct DBManager(Pool<Sqlite>);
 impl DBManager {
