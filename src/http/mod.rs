@@ -19,6 +19,7 @@ pub async fn main(state: AppState) -> Result<()> {
     axum::serve(
         listener,
         Router::new()
+            .nest("/api", api_router(&state))
             .fallback(response_not_found)
             .layer(ServiceBuilder::new().compression().trace_for_http())
             .with_state(state.clone()),
@@ -30,4 +31,8 @@ pub async fn main(state: AppState) -> Result<()> {
 
 async fn response_not_found(_: State<AppState>) -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "Not Found")
+}
+
+fn api_router(_state: &AppState) -> Router<AppState> {
+    Router::new()
 }
