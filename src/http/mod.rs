@@ -1,7 +1,7 @@
 use {
     crate::AppState,
     anyhow::{Context, Result},
-    axum::{Router, extract::State, http::StatusCode, response::IntoResponse},
+    axum::{Router, extract::State, http::StatusCode, response::IntoResponse, routing::get},
     tower::ServiceBuilder,
     tower_http::ServiceBuilderExt,
     tracing::info,
@@ -34,5 +34,5 @@ async fn response_not_found(_: State<AppState>) -> impl IntoResponse {
 }
 
 fn api_router(_state: &AppState) -> Router<AppState> {
-    Router::new()
+    Router::new().route("/healthcheck", get(async || "OK"))
 }
