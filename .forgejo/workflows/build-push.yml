@@ -27,8 +27,12 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Setup Magic Nix Cache
-        uses: https://github.com/DeterminateSystems/magic-nix-cache-action@main
+      - name: Cache Nix Store
+        uses: nix-community/cache-nix-action@v5
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-keys: |
+                    nix-${{ runner.os }}-
 
       - name: Build Docker image via Nix Flake
         run: nix build .#docker
