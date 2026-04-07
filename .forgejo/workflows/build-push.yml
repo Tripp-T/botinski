@@ -39,12 +39,10 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          # The built-in token usually has permission to write to the registry
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Tag and push Docker image
         run: |
-          # 1. Define the target image ID in the Forgejo registry
           TARGET_IMAGE_ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           TARGET_IMAGE_ID=$(echo $TARGET_IMAGE_ID | tr '[A-Z]' '[a-z]') # Ensure lowercase
           
