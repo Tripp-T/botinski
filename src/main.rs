@@ -37,6 +37,8 @@ struct Opts {
     discord_client_id: String,
     #[clap(long, env = "DISCORD_CLIENT_SECRET")]
     discord_client_secret: String,
+    #[clap(long, env = "DISCORD_SKIP_REGISTER_COMMANDS")]
+    discord_skip_register_commands: bool,
 }
 
 type AppState = Arc<AppStateInner>;
@@ -48,7 +50,7 @@ struct AppStateInner {
 impl AppStateInner {
     pub async fn new(opts: Opts) -> Result<Self> {
         Ok(AppStateInner {
-            config: ConfigData::load_from_file(&opts.config).context("failed to load config")?,
+            config: ConfigData::new(&opts.config)?,
             opts,
             shutdown_token: CancellationToken::new(),
         })
@@ -81,11 +83,7 @@ async fn main() -> anyhow::Result<()> {
     let state: AppState = Arc::new(AppStateInner::new(opts).await?);
 
     let mut thread_pool = JoinSet::new();
-    wrap_thread(
-        &mut thread_pool,
-        shutdown_signal(state.clone()),
-        "signal listener",
-    );
+    wrap_thread(&mut thread_pool, shutdown_signal(state.clone()), "Core");
     wrap_thread(&mut thread_pool, http::main(state.clone()), "HTTP");
     wrap_thread(&mut thread_pool, discord::main(state.clone()), "Discord");
 

@@ -53,9 +53,9 @@ impl FileHandler {
         }?;
         let destination_path = path.as_ref();
         let tmp_path = destination_path.with_extension("tmp");
-        let mut tmp_file = std::fs::File::open(&tmp_path).context("failed to oepn tmp file")?;
+        let mut tmp_file = std::fs::File::create(&tmp_path).context("failed to open tmp file")?;
         tmp_file
-            .write(data.as_bytes())
+            .write_all(data.as_bytes())
             .context("failed to write data")?;
         tmp_file.sync_all().context("failed to sync data write")?;
         std::fs::rename(tmp_path, destination_path).context("failed to write data")

@@ -4,7 +4,7 @@ use {
     poise::serenity_prelude::*,
     serenity::{Client, all::GatewayIntents},
     std::sync::LazyLock,
-    tracing::info,
+    tracing::{debug, info},
 };
 
 mod commands;
@@ -34,9 +34,15 @@ pub async fn main(state: AppState) -> Result<()> {
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands)
-                    .await
-                    .context("failed to register commands")?;
+                if !framework_state.opts.discord_skip_register_commands {
+                    poise::builtins::register_globally(ctx, &framework.options().commands)
+                        .await
+                        .context("failed to register commands")?;
+                    debug!(
+                        "Registered {} slash commands",
+                        framework.options().commands.len()
+                    );
+                }
                 Ok(framework_state)
             })
         })
@@ -79,13 +85,11 @@ async fn event_handler(
 }
 
 async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
-    let state = ctx.data();
+    let config = &ctx.data().config.discord;
 
     let author = ctx.author();
 
-    if state
-        .config
-        .discord
+    if config
         .admin_uids
         .as_ref()
         .is_some_and(|a| a.contains(&author.id))
@@ -94,7 +98,7 @@ async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
         return Ok(true);
     }
 
-    let Some(admin_role_ids) = state.config.discord.admin_roles.as_ref() else {
+    let Some(admin_role_ids) = config.admin_roles.as_ref() else {
         // no admin roles to check against
         ctx.reply("Permission denied")
             .await
