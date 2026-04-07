@@ -36,13 +36,15 @@ jobs:
 
       - name: Automate SQLx Prepare
         run: |
-          export DATABASE_URL="sqlite://data/db.sqlite"
-          
+          export DATABASE_URL="sqlite://./data/db.sqlite"
+          mkdir ./data
+          touch data/db.sqlite
+
           echo "Creating throwaway database and running migrations..."
-          nix run nixpkgs#sqlx-cli -- database setup
+          nix develop --command sqlx database setup
           
           echo "Generating SQLx offline cache..."
-          nix run nixpkgs#sqlx-cli -- prepare
+          nix develop --command cargo sqlx prepare
           
           echo "Staging .sqlx for Nix Flake visibility..."
           git add .sqlx
