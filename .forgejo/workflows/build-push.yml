@@ -11,7 +11,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: nix
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       packages: write
