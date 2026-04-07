@@ -8,6 +8,7 @@ anyhow = "1.0.102"
 axum = { version = "0.8.8", features = ["macros"] }
 clap = { version = "4.6.0", features = ["derive", "env"] }
 enum_dispatch = "0.3.13"
+poise = "0.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 serenity = "0.12.5"

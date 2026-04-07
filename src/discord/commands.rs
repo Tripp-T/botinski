@@ -1,58 +1,15 @@
-use {
-    enum_dispatch::enum_dispatch,
-    serenity::all::{CreateCommand, ResolvedOption},
-    std::{fmt::Debug, sync::LazyLock},
-    strum::EnumIter,
-};
+use super::{Context, Error};
+use anyhow::Context as _;
+use poise::serenity_prelude as serenity;
 
-pub static ENABLED_COMMANDS: LazyLock<[Commands; 1]> = LazyLock::new(|| [Commands::Ping(Ping)]);
-
-#[enum_dispatch(CommandT)]
-#[derive(Debug, EnumIter)]
-pub enum Commands {
-    Ping(Ping),
-}
-
-#[enum_dispatch]
-pub trait CommandT {
-    fn name(&self) -> &'static str;
-    fn description(&self) -> &'static str;
-    fn register(&self) -> CreateCommand;
-    async fn run(&self, _options: &[ResolvedOption<'_>]) -> String;
-}
-
-#[derive(Debug, Default)]
-pub struct Ping;
-impl CommandT for Ping {
-    fn name(&self) -> &'static str {
-        "ping"
-    }
-    fn description(&self) -> &'static str {
-        "Pong!"
-    }
-    fn register(&self) -> CreateCommand {
-        CreateCommand::new(self.name()).description(self.description())
-    }
-    async fn run(&self, _options: &[ResolvedOption<'_>]) -> String {
-        "Pong!".into()
-    }
-}
-
-#[test_log::test]
-fn no_duplicate_commands() {
-    use {std::collections::HashSet, tracing::error};
-    let mut seen = HashSet::new();
-
-    let mut has_failed = false;
-    for cmd in super::ENABLED_COMMANDS.iter() {
-        let is_new_value = seen.insert(cmd.name());
-        if !is_new_value {
-            error!(
-                "command with name '{}' has been seen more than once",
-                cmd.name()
-            );
-            has_failed = true;
-        }
-    }
-    assert!(!has_failed)
+/// Displays your or another user's account creation date
+#[poise::command(slash_command, prefix_command)]
+pub async fn age(
+    ctx: Context<'_>,
+    #[description = "Selected user"] user: Option<serenity::User>,
+) -> Result<(), Error> {
+    let u = user.as_ref().unwrap_or_else(|| ctx.author());
+    let response = format!("{}'s account was created at {}", u.name, u.created_at());
+    ctx.say(response).await.context("Failed to respond")?;
+    Ok(())
 }

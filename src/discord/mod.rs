@@ -1,19 +1,10 @@
 use {
-    crate::{
-        AppState,
-        discord::commands::{CommandT, ENABLED_COMMANDS},
-    },
+    crate::AppState,
     anyhow::{Context as AnyhowContext, Result},
-    serenity::{
-        Client,
-        all::{
-            Context, CreateInteractionResponse, CreateInteractionResponseMessage, EventHandler,
-            GatewayIntents, GuildId, Interaction, Message, Ready,
-        },
-        async_trait,
-    },
+    poise::serenity_prelude::*,
+    serenity::{Client, all::GatewayIntents},
     std::sync::LazyLock,
-    tracing::{debug, error, info},
+    tracing::info,
 };
 
 mod commands;
@@ -22,12 +13,34 @@ static INTENTS: LazyLock<GatewayIntents> = LazyLock::new(|| {
     GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::non_privileged()
 });
 
+type Error = Box<anyhow::Error>;
+type Context<'a> = poise::Context<'a, AppState, Error>;
+
 pub async fn main(state: AppState) -> Result<()> {
-    let handler = Handler(state.clone());
+    let framework_state = state.clone();
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![commands::age()],
+            event_handler: |ctx, event, framework, data| {
+                Box::pin(event_handler(ctx, event, framework, data))
+            },
+            ..Default::default()
+        })
+        .setup(|ctx, _ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_globally(ctx, &framework.options().commands)
+                    .await
+                    .context("failed to register commands")?;
+                Ok(framework_state)
+            })
+        })
+        .build();
+
     let mut client = Client::builder(&state.opts.discord_token, *INTENTS)
-        .event_handler(handler)
+        .framework(framework)
         .await
         .context("Failed to create discord client")?;
 
@@ -41,61 +54,23 @@ pub async fn main(state: AppState) -> Result<()> {
     client.start().await.context("client error")
 }
 
-struct Handler(AppState);
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Interaction::Command(command) = interaction {
-            println!("Received command interaction: {command:#?}");
-
-            let content = match ENABLED_COMMANDS
-                .iter()
-                .find(|c| c.name().eq_ignore_ascii_case(&command.data.name))
-            {
-                Some(cmd) => Some(cmd.run(&command.data.options()).await),
-                None => Some("Not Implemented :(".to_string()),
-            };
-
-            if let Some(content) = content {
-                let data = CreateInteractionResponseMessage::new().content(content);
-                let builder = CreateInteractionResponse::Message(data);
-                if let Err(why) = command.create_response(&ctx.http, builder).await {
-                    println!("Cannot respond to slash command: {why}");
-                }
-            }
+async fn event_handler(
+    _ctx: &poise::serenity_prelude::Context,
+    event: &FullEvent,
+    _framework: poise::FrameworkContext<'_, AppState, Error>,
+    _state: &AppState,
+) -> Result<(), Error> {
+    match event {
+        FullEvent::Ready { data_about_bot, .. } => {
+            info!("Connected to Discord as '{}'", data_about_bot.user.name);
+            info!(
+                "Invite URL: https://discord.com/oauth2/authorize?client_id={}&scope=bot&permissions={}",
+                data_about_bot.application.id,
+                INTENTS.bits()
+            );
+            Ok(())
         }
-    }
-
-    async fn message(&self, _: Context, _: Message) {}
-
-    // Set a handler to be called on the `ready` event. This is called when a shard is booted, and
-    // a READY payload is sent by Discord. This payload contains data like the current user's guild
-    // Ids, current user data, private channels, and more.
-    //
-    // In this case, just print what the current user's username is.
-    async fn ready(&self, ctx: Context, ready: Ready) {
-        let primary_guild = GuildId::new(self.0.config.discord.primary_guild_id);
-
-        let commands = primary_guild
-            .set_commands(
-                &ctx.http,
-                ENABLED_COMMANDS
-                    .iter()
-                    .map(|c| c.register())
-                    .collect::<Vec<_>>(),
-            )
-            .await;
-        match commands {
-            Ok(c) => debug!("Registered {} slash command(s)", c.len()),
-            Err(e) => error!("Failed to register slash commands: {e}"),
-        }
-
-        info!("Connected to Discord as '{}'", ready.user.name);
-        info!(
-            "Invite URL: https://discord.com/oauth2/authorize?client_id={}&scope=bot&permissions={}",
-            ready.application.id,
-            INTENTS.bits()
-        )
+        // Unhandled
+        _ => Ok(()),
     }
 }
