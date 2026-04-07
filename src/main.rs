@@ -32,12 +32,16 @@ struct Opts {
 
     // Discord
     #[clap(long, env = "DISCORD_TOKEN")]
+    /// Authentication for bot functionality
     discord_token: String,
     #[clap(long, env = "DISCORD_CLIENT_ID")]
+    /// Authentication for SSO via HTTP server
     discord_client_id: String,
     #[clap(long, env = "DISCORD_CLIENT_SECRET")]
+    /// Authentication for SSO via HTTP server
     discord_client_secret: String,
     #[clap(long, env = "DISCORD_SKIP_REGISTER_COMMANDS")]
+    /// If slash command registration should be skipped
     discord_skip_register_commands: bool,
 }
 
