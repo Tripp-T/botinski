@@ -1,7 +1,7 @@
 use {
     crate::AppState,
     anyhow::{Context as AnyhowContext, Result},
-    poise::serenity_prelude::*,
+    poise::{PrefixFrameworkOptions, serenity_prelude::*},
     serenity::{Client, all::GatewayIntents},
     std::sync::LazyLock,
     tracing::{debug, info},
@@ -23,6 +23,19 @@ pub async fn main(state: AppState) -> Result<()> {
     let framework_state = state.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
+            prefix_options: PrefixFrameworkOptions {
+                prefix: Some(
+                    state
+                        .config
+                        .read()
+                        .await
+                        .discord
+                        .command_prefix
+                        .clone()
+                        .to_string(),
+                ),
+                ..Default::default()
+            },
             commands: {
                 use commands::*;
                 vec![age(), ping(), shutdown()]

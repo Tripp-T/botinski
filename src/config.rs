@@ -61,8 +61,18 @@ impl ConfigData {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DiscordConfigData {
+    pub command_prefix: String,
     pub admin_roles: Option<Vec<RoleId>>,
     pub admin_uids: Option<Vec<UserId>>,
+}
+impl Default for DiscordConfigData {
+    fn default() -> Self {
+        Self {
+            command_prefix: "\\".to_string(),
+            admin_roles: None,
+            admin_uids: None,
+        }
+    }
 }
