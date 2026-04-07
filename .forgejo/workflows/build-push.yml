@@ -34,21 +34,6 @@ jobs:
           restore-keys: |
             nix-${{ runner.os }}-
 
-      - name: Automate SQLx Prepare
-        run: |
-          export DATABASE_URL="sqlite://./data/db.sqlite"
-          mkdir ./data
-          touch data/db.sqlite
-
-          echo "Creating throwaway database and running migrations..."
-          nix develop --command sqlx database setup
-          
-          echo "Generating SQLx offline cache..."
-          nix develop --command cargo sqlx prepare
-          
-          echo "Staging .sqlx for Nix Flake visibility..."
-          git add .sqlx
-
       - name: Build Docker image via Nix Flake
         run: nix build .#docker
 

@@ -43,13 +43,23 @@
         { pkgs }:
         let
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain pkgs.rust-toolchain;
-          src = craneLib.cleanCargoSource ./.;
+
+          sqlxAndMigrationsFilter = path: _type: builtins.match ".*(\\.sqlx|migrations)(/.*)?$" path != null;
+          sqlxOrCargo =
+            path: type: (sqlxAndMigrationsFilter path type) || (craneLib.filterCargoSources path type);
+          src = pkgs.lib.cleanSourceWith {
+            src = ./.;
+            filter = sqlxOrCargo;
+            name = "source";
+          };
+
           commonArgs = {
             inherit src;
             pname = cargoFile.package.name;
             version = cargoFile.package.version;
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = [ pkgs.openssl ];
+            SQLX_OFFLINE = "true";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
           rustApp = craneLib.buildPackage (

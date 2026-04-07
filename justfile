@@ -9,3 +9,8 @@ migrate:
 
 migrate_revert:
   sqlx migrate revert
+
+commit:
+  cargo sqlx prepare
+  git add .sqlx
+  git commit
