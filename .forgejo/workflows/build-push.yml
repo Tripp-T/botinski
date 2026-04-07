@@ -28,7 +28,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Cache Nix Store
-        uses: nix-community/cache-nix-action@v5
+        uses: https://github.com/nix-community/cache-nix-action@v5
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
           restore-keys: |
