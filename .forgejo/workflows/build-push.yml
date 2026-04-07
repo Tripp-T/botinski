@@ -26,6 +26,9 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Setup Magic Nix Cache
+        uses: https://github.com/DeterminateSystems/magic-nix-cache-action@main
+
       - name: Build Docker image via Nix Flake
         run: nix build .#docker
 
