@@ -2,6 +2,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
@@ -40,6 +41,48 @@
         );
     in
     {
+      packages = forEachSupportedSystem (
+        { pkgs }:
+        let
+          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain pkgs.rust-toolchain;
+          src = craneLib.cleanCargoSource ./.;
+          commonArgs = {
+            inherit src;
+            pname = "botinski";
+            version = "0.1.0";
+            nativeBuildInputs = [ pkgs.pkg-config ];
+            buildInputs = [ pkgs.openssl ];
+          };
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          rustApp = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit cargoArtifacts;
+            }
+          );
+
+          dockerImage = pkgs.dockerTools.buildLayeredImage {
+            name = "botinski";
+            tag = "latest";
+
+            contents = [
+              rustApp
+              pkgs.cacert
+            ];
+
+            config = {
+              Cmd = [ "${rustApp}/bin/botinski" ];
+              Env = [
+                "RUST_LOG=botinski=info"
+              ];
+            };
+          };
+        in
+        {
+          default = rustApp;
+          docker = dockerImage;
+        }
+      );
       devShells = forEachSupportedSystem (
         { pkgs }:
         {
