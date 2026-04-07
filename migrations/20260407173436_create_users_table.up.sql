@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  discord_id INTEGER,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id);

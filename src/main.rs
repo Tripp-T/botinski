@@ -1,5 +1,5 @@
 use {
-    crate::config::ConfigManager,
+    crate::{config::ConfigManager, db::DBManager},
     anyhow::{Context, Result, bail},
     clap::Parser,
     serde::{Deserialize, Serialize},
@@ -14,6 +14,7 @@ use {
 };
 
 mod config;
+mod db;
 mod discord;
 mod http;
 mod utils;
@@ -24,6 +25,9 @@ struct Opts {
     #[clap(short, long, env = "CONFIG_PATH")]
     /// Path to the configuration file
     config: PathBuf,
+    #[clap(env = "DATABASE_URL")]
+    /// URL to use to connect to the DB
+    database_url: String,
 
     // HTTP
     #[clap(long, env = "HTTP_ADDR", default_value = "127.0.0.1:3000")]
@@ -48,6 +52,7 @@ struct Opts {
 type AppState = Arc<AppStateInner>;
 struct AppStateInner {
     config: ConfigManager,
+    db: DBManager,
     opts: Opts,
     shutdown_token: CancellationToken,
 }
@@ -55,6 +60,7 @@ impl AppStateInner {
     pub async fn new(opts: Opts) -> Result<Self> {
         Ok(AppStateInner {
             config: ConfigManager::new(&opts)?,
+            db: DBManager::new(&opts).await?,
             opts,
             shutdown_token: CancellationToken::new(),
         })

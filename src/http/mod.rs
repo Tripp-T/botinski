@@ -34,5 +34,12 @@ async fn response_not_found(_: State<AppState>) -> impl IntoResponse {
 }
 
 fn api_router(_state: &AppState) -> Router<AppState> {
-    Router::new().route("/healthcheck", get(async || "OK"))
+    Router::new().route("/healthcheck", get(healthcheck))
+}
+
+async fn healthcheck(state: State<AppState>) -> impl IntoResponse {
+    if state.db.is_closed() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "DB closed");
+    }
+    (StatusCode::OK, "OK")
 }

@@ -23,6 +23,7 @@ impl ConfigManager {
     }
     pub async fn shutdown(&self) -> Result<()> {
         if self.has_been_modified.load(Ordering::Acquire) {
+            info!("Config has been modified since last read, saving...");
             let data = self.data.read().await;
             data.write_to_file(&self.config_path)
                 .context("Failed to save modified config file")?;

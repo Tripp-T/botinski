@@ -90,6 +90,7 @@
               pkg-config
               cargo-watch
               just
+              sqlx-cli
             ];
             buildInputs = with pkgs; [
               openssl
