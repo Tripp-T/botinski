@@ -85,7 +85,7 @@ async fn event_handler(
 }
 
 async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
-    let config = &ctx.data().config.discord;
+    let config = &ctx.data().config.read().await.discord;
 
     let author = ctx.author();
 

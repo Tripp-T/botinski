@@ -1,5 +1,5 @@
 use {
-    crate::config::ConfigData,
+    crate::config::ConfigManager,
     anyhow::{Context, Result, bail},
     clap::Parser,
     serde::{Deserialize, Serialize},
@@ -43,14 +43,14 @@ struct Opts {
 
 type AppState = Arc<AppStateInner>;
 struct AppStateInner {
-    config: ConfigData,
+    config: ConfigManager,
     opts: Opts,
     shutdown_token: CancellationToken,
 }
 impl AppStateInner {
     pub async fn new(opts: Opts) -> Result<Self> {
         Ok(AppStateInner {
-            config: ConfigData::new(&opts.config)?,
+            config: ConfigManager::new(&opts)?,
             opts,
             shutdown_token: CancellationToken::new(),
         })
@@ -62,12 +62,7 @@ impl AppStateInner {
         }
         self.shutdown_token.cancel();
 
-        // Save config if it was modified
-        if self.config.has_been_modified {
-            self.config
-                .write_to_file(&self.opts.config)
-                .context("failed to save modified config")?;
-        }
+        self.config.shutdown().await?;
 
         Ok(())
     }
