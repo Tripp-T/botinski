@@ -23,7 +23,7 @@ impl ConfigManager {
         })
     }
     pub async fn shutdown(&self) -> Result<()> {
-        if self.has_been_modified.load(Ordering::Relaxed) {
+        if self.has_been_modified.load(Ordering::Acquire) {
             let data = self.data.read().await;
             data.write_to_file(&self.config_path)
                 .context("Failed to save modified config file")?;
@@ -35,7 +35,7 @@ impl ConfigManager {
     }
     pub async fn write(&self) -> tokio::sync::RwLockWriteGuard<'_, ConfigData> {
         // If write is called, assume config was modified
-        self.has_been_modified.swap(false, Ordering::Relaxed);
+        self.has_been_modified.store(true, Ordering::Release);
         self.data.write().await
     }
 }
