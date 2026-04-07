@@ -1,3 +1,5 @@
+use serenity::all::{RoleId, UserId};
+
 use crate::utils::{load_file, write_file};
 
 use super::*;
@@ -20,5 +22,6 @@ impl ConfigData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiscordConfigData {
-    pub primary_guild_id: u64,
+    pub admin_roles: Option<Vec<RoleId>>,
+    pub admin_uids: Option<Vec<UserId>>,
 }

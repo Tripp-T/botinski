@@ -23,7 +23,10 @@ pub async fn main(state: AppState) -> Result<()> {
     let framework_state = state.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![commands::age()],
+            commands: {
+                use commands::*;
+                vec![age(), ping(), shutdown()]
+            },
             event_handler: |ctx, event, framework, data| {
                 Box::pin(event_handler(ctx, event, framework, data))
             },
@@ -73,4 +76,49 @@ async fn event_handler(
         // Unhandled
         _ => Ok(()),
     }
+}
+
+async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
+    let state = ctx.data();
+
+    let author = ctx.author();
+
+    if state
+        .config
+        .discord
+        .admin_uids
+        .as_ref()
+        .is_some_and(|a| a.contains(&author.id))
+    {
+        // is listed in the admin user ids
+        return Ok(true);
+    }
+
+    let Some(admin_role_ids) = state.config.discord.admin_roles.as_ref() else {
+        // no admin roles to check against
+        ctx.reply("Permission denied")
+            .await
+            .context("Failed to reply")?;
+        return Ok(false);
+    };
+    let Some(guild) = ctx.guild().map(|g| g.id) else {
+        // is not in admin list and not in a guild to cross-check roles against
+        ctx.reply("Permission denied")
+            .await
+            .context("Failed to reply")?;
+        return Ok(false);
+    };
+    for admin_role in admin_role_ids {
+        if author
+            .has_role(&ctx, guild, admin_role)
+            .await
+            .context("Failed to lookup guild role")?
+        {
+            return Ok(true);
+        }
+    }
+    ctx.reply("Permission denied")
+        .await
+        .context("Failed to reply")?;
+    Ok(false)
 }
