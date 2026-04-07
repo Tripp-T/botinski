@@ -11,8 +11,6 @@
       supportedSystems = [
         "x86_64-linux"
         "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
       ];
       forEachSupportedSystem =
         f:
@@ -38,6 +36,7 @@
             };
           }
         );
+      cargoFile = builtins.fromTOML (builtins.readFile ./Cargo.toml);
     in
     {
       packages = forEachSupportedSystem (
@@ -47,8 +46,8 @@
           src = craneLib.cleanCargoSource ./.;
           commonArgs = {
             inherit src;
-            pname = "botinski";
-            version = "0.1.0";
+            pname = cargoFile.package.name;
+            version = cargoFile.package.version;
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = [ pkgs.openssl ];
           };
@@ -61,7 +60,7 @@
           );
 
           dockerImage = pkgs.dockerTools.buildLayeredImage {
-            name = "botinski";
+            name = cargoFile.package.name;
             tag = "latest";
 
             contents = [
@@ -70,9 +69,9 @@
             ];
 
             config = {
-              Cmd = [ "${rustApp}/bin/botinski" ];
+              Cmd = [ "${rustApp}/bin/${cargoFile.package.name}" ];
               Env = [
-                "RUST_LOG=botinski=info"
+                "RUST_LOG=${cargoFile.package.name}=info"
               ];
             };
           };
@@ -86,17 +85,17 @@
         { pkgs }:
         {
           default = pkgs.mkShell {
-            buildInputs = with pkgs; [
-              rust-toolchain
-              openssl
-              pkg-config
-            ];
             packages = with pkgs; [
-              just
+              rust-toolchain
+              pkg-config
               cargo-watch
+              just
+            ];
+            buildInputs = with pkgs; [
+              openssl
             ];
             env = {
-              RUST_LOG = "botinski=debug";
+              RUST_LOG = "${cargoFile.package.name}=debug";
             };
           };
         }
