@@ -27,7 +27,6 @@
                   rust-toolchain = prev.rust-bin.stable.latest.default.override {
                     targets = [
                       "x86_64-unknown-linux-gnu"
-                      "wasm32-unknown-unknown"
                     ];
                     extensions = [
                       "rust-src"
