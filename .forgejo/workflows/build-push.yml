@@ -1,0 +1,55 @@
+name: Build and Push Nix Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: forgejo.trippt.xyz
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build Docker image via Nix Flake
+        run: nix build .#docker
+
+      - name: Load image into Docker
+        run: |
+          echo "Loading Docker image..."
+          docker load -i result
+
+      - name: Log in to Forgejo Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # The built-in token usually has permission to write to the registry
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push Docker image
+        run: |
+          # 1. Define the target image ID in the Forgejo registry
+          TARGET_IMAGE_ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          TARGET_IMAGE_ID=$(echo $TARGET_IMAGE_ID | tr '[A-Z]' '[a-z]') # Ensure lowercase
+          
+          SOURCE_IMAGE="botinski:latest"
+          docker tag $SOURCE_IMAGE $TARGET_IMAGE_ID:latest
+          
+          echo "Pushing images..."
+          docker push $TARGET_IMAGE_ID:latest
