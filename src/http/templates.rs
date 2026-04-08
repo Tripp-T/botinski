@@ -27,8 +27,8 @@ impl TemplateBase {
                     title {
                         @if let Some(title) = &self.title { (title) } @else { "" }
                     }
-                    script src="htmx.2.0.8.min.js" {}
-                    link href="output.css" rel="stylesheet" {}
+                    script src="/htmx.2.0.8.min.js" {}
+                    link href="/output.css" rel="stylesheet" {}
                 }
                 body class="dark:bg-gray-950 dark:text-white bg-gray-100" {
                     nav class="w-full py-1 flex border-b border-gray-500" {

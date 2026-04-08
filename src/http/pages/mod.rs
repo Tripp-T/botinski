@@ -1,12 +1,11 @@
-use axum::{
-    Router, debug_handler, extract::State, http::StatusCode, response::IntoResponse, routing::get,
-};
-use maud::html;
-
 use crate::{
     AppState,
     http::templates::{TemplateBase, template_error},
 };
+use axum::{
+    Router, debug_handler, extract::State, http::StatusCode, response::IntoResponse, routing::get,
+};
+use maud::html;
 
 #[debug_handler]
 pub async fn page_not_found(_: State<AppState>, tmpl: TemplateBase) -> impl IntoResponse {
@@ -15,6 +14,17 @@ pub async fn page_not_found(_: State<AppState>, tmpl: TemplateBase) -> impl Into
         tmpl.set_title("404").render(template_error(
             "page not found",
             "The requested resource could not be found",
+        )),
+    )
+}
+
+#[debug_handler]
+pub async fn page_internal_error(_: State<AppState>, tmpl: TemplateBase) -> impl IntoResponse {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        tmpl.set_title("500").render(template_error(
+            "internal server error",
+            "An error was encountered while attempting to facilitate your request",
         )),
     )
 }

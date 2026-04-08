@@ -16,6 +16,7 @@ use tower_livereload::LiveReloadLayer;
 use tracing::{debug, info};
 
 mod api;
+mod components;
 mod pages;
 mod templates;
 
