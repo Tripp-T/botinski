@@ -9,7 +9,7 @@ pub struct DBManager(Pool<Sqlite>);
 impl DBManager {
     pub async fn new(opts: &Opts) -> anyhow::Result<Self> {
         let pool = SqlitePoolOptions::new()
-            .max_connections(5)
+            .max_connections(opts.database_max_connections)
             .connect(&opts.database_url)
             .await
             .context("Failed to connect to database")?;

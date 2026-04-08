@@ -29,6 +29,9 @@ struct Opts {
     #[clap(long, env = "DATABASE_URL")]
     /// URL to use to connect to the DB
     database_url: String,
+    #[clap(long, env = "DATABASE_MAX_CONNECTIONS", default_value_t = 5)]
+    /// Maximum number of connections to the database
+    database_max_connections: u32,
 
     // HTTP
     #[clap(long, env = "HTTP_ADDR", default_value = "127.0.0.1:3000")]
