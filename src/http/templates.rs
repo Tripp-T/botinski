@@ -25,7 +25,7 @@ impl TemplateBase {
                     meta charset="UTF-8" {}
                     meta name="viewport" content="width=device-width, initial-scale=1.0" {}
                     title {
-                        @if let Some(title) = &self.title { (title) } @else { ""}
+                        @if let Some(title) = &self.title { (title) } @else { "" }
                     }
                     script src="htmx.2.0.8.min.js" {}
                     link href="output.css" rel="stylesheet" {}
