@@ -58,13 +58,6 @@ impl From<maud::Markup> for MarkupDisplay {
     }
 }
 
-#[derive(Template)]
-#[template(path = "index.askama.html")]
-pub struct IndexTemplate {
-    pub base: TemplateBase,
-    pub content: MarkupDisplay,
-}
-
 pub trait TemplateAxumResponse {
     fn render_response(&self) -> Result<Html<String>, StatusCode>;
 }
@@ -78,4 +71,19 @@ impl<T: Template> TemplateAxumResponse for T {
             }
         }
     }
+}
+
+#[derive(Template)]
+#[template(path = "index.askama.html")]
+pub struct IndexTemplate {
+    pub base: TemplateBase,
+    pub content: MarkupDisplay,
+}
+
+#[derive(Template)]
+#[template(path = "error.askama.html")]
+pub struct ErrorTemplate<'a> {
+    pub base: TemplateBase,
+    pub error_title: &'a str,
+    pub error_description: &'a str,
 }
