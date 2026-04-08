@@ -1,11 +1,9 @@
-use {
-    super::*,
-    crate::utils::{load_file, write_file},
-    poise::serenity_prelude::all::{RoleId, UserId},
-    std::hash::{DefaultHasher, Hash, Hasher},
-    tokio::sync::RwLock,
-    tracing::warn,
-};
+use super::*;
+use crate::utils::{load_file, write_file};
+use poise::serenity_prelude::all::{RoleId, UserId};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use tokio::sync::RwLock;
+use tracing::warn;
 
 pub struct ConfigManager {
     data_hash: u64,
@@ -30,9 +28,11 @@ impl ConfigManager {
         }
         Ok(())
     }
+    /// Returns a RwLockReadGuard of [ConfigData]
     pub async fn read(&self) -> tokio::sync::RwLockReadGuard<'_, ConfigData> {
         self.data.read().await
     }
+    /// Returns a RwLockWriteGuard of [ConfigData]
     pub async fn write(&self) -> tokio::sync::RwLockWriteGuard<'_, ConfigData> {
         self.data.write().await
     }

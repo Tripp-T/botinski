@@ -1,10 +1,8 @@
-use {
-    anyhow::{Context, bail},
-    serde::{Serialize, de::DeserializeOwned},
-    std::{
-        io::{BufReader, Write},
-        path::Path,
-    },
+use anyhow::{Context, bail};
+use serde::{Serialize, de::DeserializeOwned};
+use std::{
+    io::{BufReader, Write},
+    path::Path,
 };
 
 enum FileHandler {

@@ -1,10 +1,8 @@
-use {
-    crate::{AppState, Opts},
-    anyhow::{Context as AnyhowContext, Result},
-    poise::{PrefixFrameworkOptions, serenity_prelude::*},
-    std::sync::{Arc, LazyLock},
-    tracing::{debug, info},
-};
+use crate::{AppState, Opts};
+use anyhow::{Context as AnyhowContext, Result};
+use poise::{PrefixFrameworkOptions, serenity_prelude::*};
+use std::sync::{Arc, LazyLock};
+use tracing::{debug, info};
 
 mod commands;
 

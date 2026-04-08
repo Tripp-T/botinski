@@ -1,8 +1,6 @@
-use {
-    anyhow::Context,
-    sqlx::{SqlitePool, prelude::FromRow},
-    uuid::Uuid,
-};
+use anyhow::Context;
+use sqlx::{SqlitePool, prelude::FromRow};
+use uuid::Uuid;
 
 #[derive(FromRow, Debug)]
 pub struct AppUser {
