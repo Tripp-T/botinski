@@ -2,45 +2,46 @@ use {
     super::*,
     crate::utils::{load_file, write_file},
     poise::serenity_prelude::all::{RoleId, UserId},
-    std::sync::atomic::{AtomicBool, Ordering},
+    std::{
+        hash::{DefaultHasher, Hash, Hasher},
+        sync::atomic::{AtomicBool, Ordering},
+    },
     tokio::sync::RwLock,
     tracing::warn,
 };
 
 pub struct ConfigManager {
+    data_hash: u64,
     data: RwLock<ConfigData>,
     config_path: PathBuf,
-    has_been_modified: AtomicBool,
 }
 impl ConfigManager {
     pub fn new(opts: &Opts) -> Result<Self> {
         let data = ConfigData::new(&opts.config)?;
         Ok(Self {
+            data_hash: data.get_hash(),
             data: RwLock::new(data),
             config_path: opts.config.clone(),
-            has_been_modified: AtomicBool::new(false),
         })
     }
     pub async fn shutdown(&self) -> Result<()> {
-        if self.has_been_modified.load(Ordering::Acquire) {
+        if self.data_hash != self.data.read().await.get_hash() {
             info!("Config has been modified since last read, saving...");
             let data = self.data.read().await;
             data.write_to_file(&self.config_path)
                 .context("Failed to save modified config file")?;
-        };
+        }
         Ok(())
     }
     pub async fn read(&self) -> tokio::sync::RwLockReadGuard<'_, ConfigData> {
         self.data.read().await
     }
     pub async fn write(&self) -> tokio::sync::RwLockWriteGuard<'_, ConfigData> {
-        // If write is called, assume config was modified
-        self.has_been_modified.store(true, Ordering::Release);
         self.data.write().await
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Hash)]
 pub struct ConfigData {
     pub discord: DiscordConfigData,
 }
@@ -53,6 +54,11 @@ impl ConfigData {
         }
         Self::load_from_file(path)
     }
+    pub fn get_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
     pub fn load_from_file(path: &PathBuf) -> anyhow::Result<Self> {
         load_file(path)
     }
@@ -61,7 +67,7 @@ impl ConfigData {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct DiscordConfigData {
     pub command_prefix: String,
     pub admin_roles: Option<Vec<RoleId>>,
