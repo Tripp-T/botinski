@@ -125,15 +125,20 @@ async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
             .context("Failed to reply")?;
         return Ok(false);
     };
-    for admin_role in admin_role_ids {
-        if author
-            .has_role(&ctx, guild, admin_role)
-            .await
-            .context("Failed to lookup guild role")?
-        {
-            return Ok(true);
-        }
+
+    let author_membership = guild
+        .member(&ctx, author.id)
+        .await
+        .context("Failed to fetch author guild membership")?;
+
+    if author_membership
+        .roles
+        .iter()
+        .any(|rid| admin_role_ids.contains(rid))
+    {
+        return Ok(true);
     }
+
     ctx.reply("Permission denied")
         .await
         .context("Failed to reply")?;
