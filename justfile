@@ -1,6 +1,9 @@
 _default:
   @just --list
 
+dev:
+  cargo watch -x 'run' --ignore data
+
 new_migration name:
   sqlx migrate add -r {{name}}
 

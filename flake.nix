@@ -43,13 +43,16 @@
         { pkgs }:
         let
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain pkgs.rust-toolchain;
-
+          httpFilter = path: _type: builtins.match ".*(public|input.css|templates)(/.*)?$" path != null;
           sqlxAndMigrationsFilter = path: _type: builtins.match ".*(\\.sqlx|migrations)(/.*)?$" path != null;
-          sqlxOrCargo =
-            path: type: (sqlxAndMigrationsFilter path type) || (craneLib.filterCargoSources path type);
+          srcFilter =
+            path: type:
+            (sqlxAndMigrationsFilter path type)
+            || (httpFilter path type)
+            || (craneLib.filterCargoSources path type);
           src = pkgs.lib.cleanSourceWith {
             src = ./.;
-            filter = sqlxOrCargo;
+            filter = srcFilter;
             name = "source";
           };
 
@@ -57,7 +60,10 @@
             inherit src;
             pname = cargoFile.package.name;
             version = cargoFile.package.version;
-            nativeBuildInputs = [ pkgs.pkg-config ];
+            nativeBuildInputs = with pkgs; [
+              pkg-config
+              tailwindcss_4
+            ];
             buildInputs = [ pkgs.openssl ];
             SQLX_OFFLINE = "true";
           };
@@ -66,6 +72,10 @@
             commonArgs
             // {
               inherit cargoArtifacts;
+              postInstall = ''
+                mkdir -p $out/share/site
+                cp -R target/dist/. $out/share/site/
+              '';
             }
           );
 
@@ -82,6 +92,7 @@
               Cmd = [ "${rustApp}/bin/${cargoFile.package.name}" ];
               Env = [
                 "RUST_LOG=${cargoFile.package.name}=info"
+                "HTTP_SITE_ROOT=${rustApp}/share/site"
               ];
             };
           };
@@ -101,6 +112,7 @@
               cargo-watch
               just
               sqlx-cli
+              tailwindcss_4
             ];
             buildInputs = with pkgs; [
               openssl

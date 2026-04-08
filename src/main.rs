@@ -34,6 +34,9 @@ struct Opts {
     #[clap(long, env = "HTTP_ADDR", default_value = "127.0.0.1:3000")]
     /// Address and port the http server should bind to
     http_addr: SocketAddr,
+    #[clap(long, env = "HTTP_SITE_ROOT")]
+    /// Path to the site root
+    http_site_root: PathBuf,
 
     // Discord
     #[clap(long, env = "DISCORD_TOKEN")]

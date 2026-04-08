@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" {% if base.dark_theme %} class="dark" {% endif %}>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if let Some(title) = base.title %} {{ title }} | Botinski {% else %} Botinski {% endif %}</title>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
+  <link href="./output.css" rel="stylesheet">
+</head>
+<body>
+  <nav class="w-full py-1 flex">
+    <div class="w-full max-w-3xl mx-auto" hx-boost="true">
+      <a href="/">Home</a>
+    </div>
+  </nav>
+  {% block body %}
+  {% endblock %}
+</body>
+</html>
