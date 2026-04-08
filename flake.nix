@@ -43,7 +43,7 @@
         { pkgs }:
         let
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain pkgs.rust-toolchain;
-          httpFilter = path: _type: builtins.match ".*(public|input.css|templates)(/.*)?$" path != null;
+          httpFilter = path: _type: builtins.match ".*(public|input.css)(/.*)?$" path != null;
           sqlxAndMigrationsFilter = path: _type: builtins.match ".*(\\.sqlx|migrations)(/.*)?$" path != null;
           srcFilter =
             path: type:

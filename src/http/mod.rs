@@ -1,7 +1,7 @@
 use {
     crate::{
         AppState,
-        http::templates::{ErrorTemplate, IndexTemplate, TemplateAxumResponse, TemplateBase},
+        http::templates::{TemplateBase, template_error},
     },
     anyhow::{Context, Result},
     axum::{
@@ -57,12 +57,13 @@ pub async fn main(state: AppState) -> Result<()> {
 
 #[debug_handler]
 async fn response_not_found(_: State<AppState>, tmpl: TemplateBase) -> impl IntoResponse {
-    ErrorTemplate {
-        base: tmpl.set_title("404"),
-        error_title: "page not found",
-        error_description: "The requested resource could not be found",
-    }
-    .render_response()
+    (
+        StatusCode::NOT_FOUND,
+        tmpl.set_title("404").render(template_error(
+            "page not found",
+            "The requested resource could not be found",
+        )),
+    )
 }
 
 fn api_router(_state: &AppState) -> Router<AppState> {
@@ -82,13 +83,8 @@ fn pages_router(_state: &AppState) -> Router<AppState> {
 
 #[debug_handler]
 async fn page_index(_state: State<AppState>, tmpl: TemplateBase) -> impl IntoResponse {
-    IndexTemplate {
-        base: tmpl.set_title("home"),
-        content: html! {
-            p { "Hello world!!!" }
-            p class="text-red-400" { "From Rust btw "}
-        }
-        .into(),
-    }
-    .render_response()
+    tmpl.set_title("Home").render(html! {
+        p { "Hello world!!!" }
+        p class="text-red-400" { "From Rust btw "}
+    })
 }

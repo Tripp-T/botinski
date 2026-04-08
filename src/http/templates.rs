@@ -1,7 +1,7 @@
 use {
     crate::AppState,
-    askama::Template,
     axum::{RequestPartsExt, extract::FromRequestParts, http::StatusCode, response::Html},
+    maud::{Markup, html},
     tower_cookies::Cookies,
     tracing::error,
 };
@@ -15,6 +15,33 @@ impl TemplateBase {
     pub fn set_title<S: AsRef<str>>(mut self, title: S) -> Self {
         self.title = Some(title.as_ref().to_string());
         self
+    }
+    pub fn render(&self, body: Markup) -> Html<Markup> {
+        Html(html! {
+            (maud::DOCTYPE)
+
+            html lang="en" class=@if self.dark_theme {"dark"} @else {""}   {
+                head {
+                    meta charset="UTF-8" {}
+                    meta name="viewport" content="width=device-width, initial-scale=1.0" {}
+                    title {
+                        @if let Some(title) = &self.title { (title) } @else { ""}
+                    }
+                    script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" {}
+                    link href="./output.css" rel="stylesheet" {}
+                }
+                body class="dark:bg-gray-950 dark:text-white bg-gray-100" {
+                    nav class="w-full py-1 flex border-b border-gray-500" {
+                        div class="px-2 w-full max-w-3xl mx-auto" hx-boost="true" {
+                            a href="/" { "Home" }
+                        }
+                    }
+                    div id="content" class="p-2" {
+                        (body)
+                    }
+                }
+            }
+        })
     }
 }
 impl FromRequestParts<AppState> for TemplateBase {
@@ -46,44 +73,16 @@ impl FromRequestParts<AppState> for TemplateBase {
     }
 }
 
-pub struct MarkupDisplay(pub maud::Markup);
-impl std::fmt::Display for MarkupDisplay {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.0)
-    }
-}
-impl From<maud::Markup> for MarkupDisplay {
-    fn from(value: maud::Markup) -> Self {
-        Self(value)
-    }
-}
-
-pub trait TemplateAxumResponse {
-    fn render_response(&self) -> Result<Html<String>, StatusCode>;
-}
-impl<T: Template> TemplateAxumResponse for T {
-    fn render_response(&self) -> Result<Html<String>, StatusCode> {
-        match self.render() {
-            Ok(html) => Ok(Html(html)),
-            Err(e) => {
-                error!("Failed to render template: {e}");
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
+/// Returns a html component
+pub fn template_error<S: AsRef<str>>(title: S, description: S) -> maud::Markup {
+    html! {
+        div class="flex flex-col text-center m-auto w-full max-w-xl border border-gray-500 rounded-md p-4" {
+            div class="text-xl text-red-500 border-b font-bold pb-2" {
+                (title.as_ref())
+            }
+            p class="pt-4" {
+                (description.as_ref())
             }
         }
     }
-}
-
-#[derive(Template)]
-#[template(path = "index.askama.html")]
-pub struct IndexTemplate {
-    pub base: TemplateBase,
-    pub content: MarkupDisplay,
-}
-
-#[derive(Template)]
-#[template(path = "error.askama.html")]
-pub struct ErrorTemplate<'a> {
-    pub base: TemplateBase,
-    pub error_title: &'a str,
-    pub error_description: &'a str,
 }
