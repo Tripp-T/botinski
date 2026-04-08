@@ -1,7 +1,3 @@
-use axum::handler::Handler;
-use tower_http::services::ServeDir;
-#[cfg(debug_assertions)]
-use tower_livereload::LiveReloadLayer;
 use {
     crate::{
         AppState,
@@ -9,19 +5,22 @@ use {
     },
     anyhow::{Context, Result},
     axum::{
-        Router, debug_handler, extract::State, http::StatusCode, response::IntoResponse,
-        routing::get,
+        Router, debug_handler, extract::State, handler::Handler, http::StatusCode,
+        response::IntoResponse, routing::get,
     },
+    maud::html,
     tower::ServiceBuilder,
     tower_cookies::CookieManagerLayer,
-    tower_http::ServiceBuilderExt,
-    tracing::info,
+    tower_http::{ServiceBuilderExt, services::ServeDir},
+    tower_livereload::LiveReloadLayer,
+    tracing::{debug, info},
 };
 
 mod templates;
 
 async fn await_shutdown_signal(state: AppState) {
-    state.shutdown_token.cancelled().await
+    state.shutdown_token.cancelled().await;
+    debug!("Received shutdown event")
 }
 
 pub async fn main(state: AppState) -> Result<()> {
@@ -29,6 +28,16 @@ pub async fn main(state: AppState) -> Result<()> {
         .await
         .with_context(|| format!("Failed to bind to HTTP_ADDR '{}'", state.opts.http_addr))?;
     info!("HTTP server listening on http://{}", state.opts.http_addr);
+
+    let middleware = ServiceBuilder::new()
+        .compression()
+        .trace_for_http()
+        .layer(CookieManagerLayer::new());
+    #[cfg(debug_assertions)]
+    let reload_middleware = LiveReloadLayer::new();
+    #[cfg(debug_assertions)]
+    let middleware = middleware.layer(reload_middleware);
+
     axum::serve(
         listener,
         Router::new()
@@ -38,15 +47,7 @@ pub async fn main(state: AppState) -> Result<()> {
                 ServeDir::new(state.opts.http_site_root.clone())
                     .fallback(response_not_found.with_state(state.clone())),
             )
-            .layer({
-                let middleware = ServiceBuilder::new()
-                    .compression()
-                    .trace_for_http()
-                    .layer(CookieManagerLayer::new());
-                #[cfg(debug_assertions)]
-                let middleware = middleware.layer(LiveReloadLayer::new());
-                middleware
-            })
+            .layer(middleware)
             .with_state(state.clone()),
     )
     .with_graceful_shutdown(await_shutdown_signal(state))
@@ -78,7 +79,11 @@ fn pages_router(_state: &AppState) -> Router<AppState> {
 async fn page_index(_state: State<AppState>, tmpl: TemplateBase) -> impl IntoResponse {
     IndexTemplate {
         base: tmpl.set_title("home"),
-        name: "??",
+        content: html! {
+            p { "Hello world!!!" }
+            p class="text-red-400" { "From Rust btw "}
+        }
+        .into(),
     }
     .render_response()
 }

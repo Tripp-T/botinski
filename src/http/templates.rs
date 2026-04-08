@@ -1,14 +1,10 @@
-use askama::Template;
-use axum::{
-    RequestPartsExt,
-    extract::FromRequestParts,
-    http::StatusCode,
-    response::{Html, IntoResponse},
+use {
+    crate::AppState,
+    askama::Template,
+    axum::{RequestPartsExt, extract::FromRequestParts, http::StatusCode, response::Html},
+    tower_cookies::Cookies,
+    tracing::error,
 };
-use tower_cookies::Cookies;
-use tracing::error;
-
-use crate::AppState;
 
 #[derive(Clone)]
 pub struct TemplateBase {
@@ -31,18 +27,18 @@ impl FromRequestParts<AppState> for TemplateBase {
             error!("Failed to parse cookies from request: {e}");
             s
         })?;
-        let dark_theme_cookie = cookies.get("dark_theme");
-        let dark_theme = match dark_theme_cookie {
-            None => true,
-            Some(mut dark_theme_cookie) => match dark_theme_cookie.value().parse::<bool>() {
+        let dark_theme = cookies
+            .get("dark_theme")
+            .map(|mut cookie| match cookie.value().parse::<bool>() {
                 Ok(value) => value,
                 Err(e) => {
                     error!("Invalid theme cookie: {e}");
-                    dark_theme_cookie.set_value(true.to_string());
+                    cookie.set_value(true.to_string());
                     true
                 }
-            },
-        };
+            })
+            // no cookie is set, default to true
+            .unwrap_or(true);
         Ok(Self {
             dark_theme,
             title: None,
@@ -50,11 +46,23 @@ impl FromRequestParts<AppState> for TemplateBase {
     }
 }
 
+pub struct MarkupDisplay(pub maud::Markup);
+impl std::fmt::Display for MarkupDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.0)
+    }
+}
+impl From<maud::Markup> for MarkupDisplay {
+    fn from(value: maud::Markup) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Template)]
 #[template(path = "index.askama.html")]
-pub struct IndexTemplate<'a> {
+pub struct IndexTemplate {
     pub base: TemplateBase,
-    pub name: &'a str,
+    pub content: MarkupDisplay,
 }
 
 pub trait TemplateAxumResponse {
