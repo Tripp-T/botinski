@@ -14,7 +14,7 @@ pub struct AppUser {
 impl AppUser {
     pub async fn insert(
         pool: &SqlitePool,
-        discord_id: serenity::all::UserId,
+        discord_id: poise::serenity_prelude::all::UserId,
         name: String,
         email: String,
     ) -> Result<Uuid, sqlx::Error> {
@@ -49,7 +49,7 @@ impl AppUser {
     }
     pub async fn get_by_discord_id(
         pool: &SqlitePool,
-        discord_id: serenity::all::UserId,
+        discord_id: poise::serenity_prelude::all::UserId,
     ) -> Result<Option<AppUser>, sqlx::Error> {
         let discord_id = discord_id.get().to_string();
         sqlx::query_as!(
@@ -64,7 +64,7 @@ impl AppUser {
         .fetch_optional(pool)
         .await
     }
-    pub fn discord_id(&self) -> anyhow::Result<serenity::all::UserId> {
+    pub fn discord_id(&self) -> anyhow::Result<poise::serenity_prelude::all::UserId> {
         Ok(self
             .discord_id
             .parse::<u64>()

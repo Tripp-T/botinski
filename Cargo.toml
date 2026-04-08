@@ -15,7 +15,6 @@ maud = { version = "0.27.0", features = ["axum"] }
 poise = "0.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-serenity = "0.12.5"
 sqlx = { version = "0.8.6", features = [
   "macros",
   "sqlite",

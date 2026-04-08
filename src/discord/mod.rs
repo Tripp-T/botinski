@@ -2,7 +2,6 @@ use {
     crate::{AppState, Opts},
     anyhow::{Context as AnyhowContext, Result},
     poise::{PrefixFrameworkOptions, serenity_prelude::*},
-    serenity::{Client, all::GatewayIntents},
     std::sync::{Arc, LazyLock},
     tracing::{debug, info},
 };

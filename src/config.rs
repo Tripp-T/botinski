@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::utils::{load_file, write_file},
-    serenity::all::{RoleId, UserId},
+    poise::serenity_prelude::all::{RoleId, UserId},
     std::sync::atomic::{AtomicBool, Ordering},
     tokio::sync::RwLock,
     tracing::warn,
