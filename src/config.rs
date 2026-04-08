@@ -2,10 +2,7 @@ use {
     super::*,
     crate::utils::{load_file, write_file},
     poise::serenity_prelude::all::{RoleId, UserId},
-    std::{
-        hash::{DefaultHasher, Hash, Hasher},
-        sync::atomic::{AtomicBool, Ordering},
-    },
+    std::hash::{DefaultHasher, Hash, Hasher},
     tokio::sync::RwLock,
     tracing::warn,
 };
