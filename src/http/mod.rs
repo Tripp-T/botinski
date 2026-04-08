@@ -1,3 +1,5 @@
+#[cfg(feature = "dev")]
+use tower_livereload::LiveReloadLayer;
 use {
     crate::{
         AppState,
@@ -12,7 +14,6 @@ use {
     tower::ServiceBuilder,
     tower_cookies::CookieManagerLayer,
     tower_http::{ServiceBuilderExt, services::ServeDir},
-    tower_livereload::LiveReloadLayer,
     tracing::{debug, info},
 };
 
@@ -33,9 +34,9 @@ pub async fn main(state: AppState) -> Result<()> {
         .compression()
         .trace_for_http()
         .layer(CookieManagerLayer::new());
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     let reload_middleware = LiveReloadLayer::new();
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     let middleware = middleware.layer(reload_middleware);
 
     axum::serve(
