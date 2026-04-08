@@ -15,7 +15,7 @@ static INTENTS: LazyLock<GatewayIntents> = LazyLock::new(|| {
         | GatewayIntents::non_privileged()
 });
 
-type Error = Box<anyhow::Error>;
+type Error = anyhow::Error;
 type Context<'a> = poise::Context<'a, AppState, Error>;
 
 pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {

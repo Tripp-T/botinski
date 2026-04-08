@@ -29,8 +29,7 @@ pub async fn shutdown(ctx: Context<'_>) -> Result<(), Error> {
         .reply("o7")
         .await
         .map(|_| ())
-        .context("failed to send shutdown advisement message")
-        .map_err(Box::new);
+        .context("failed to send shutdown advisement message");
     ctx.data().shutdown().await?;
     res
 }
