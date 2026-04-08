@@ -1,9 +1,9 @@
 use {
-    crate::AppState,
+    crate::{AppState, Opts},
     anyhow::{Context as AnyhowContext, Result},
     poise::{PrefixFrameworkOptions, serenity_prelude::*},
     serenity::{Client, all::GatewayIntents},
-    std::sync::LazyLock,
+    std::sync::{Arc, LazyLock},
     tracing::{debug, info},
 };
 
@@ -19,8 +19,10 @@ static INTENTS: LazyLock<GatewayIntents> = LazyLock::new(|| {
 type Error = Box<anyhow::Error>;
 type Context<'a> = poise::Context<'a, AppState, Error>;
 
-pub async fn main(state: AppState) -> Result<()> {
+pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
     let framework_state = state.clone();
+    let discord_skip_register_commands = Arc::new(opts.discord_skip_register_commands);
+    let discord_token = opts.discord_token.clone();
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             prefix_options: PrefixFrameworkOptions {
@@ -47,7 +49,7 @@ pub async fn main(state: AppState) -> Result<()> {
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                if !framework_state.opts.discord_skip_register_commands {
+                if !discord_skip_register_commands.as_ref() {
                     poise::builtins::register_globally(ctx, &framework.options().commands)
                         .await
                         .context("failed to register commands")?;
@@ -61,7 +63,7 @@ pub async fn main(state: AppState) -> Result<()> {
         })
         .build();
 
-    let mut client = Client::builder(&state.opts.discord_token, *INTENTS)
+    let mut client = Client::builder(&discord_token, *INTENTS)
         .framework(framework)
         .await
         .context("Failed to create discord client")?;

@@ -1,5 +1,9 @@
+use std::sync::Arc;
+
+use crate::Opts;
 #[cfg(feature = "dev")]
 use tower_livereload::LiveReloadLayer;
+
 use {
     crate::{
         AppState,
@@ -24,11 +28,11 @@ async fn await_shutdown_signal(state: AppState) {
     debug!("Received shutdown event")
 }
 
-pub async fn main(state: AppState) -> Result<()> {
-    let listener = tokio::net::TcpListener::bind(state.opts.http_addr)
+pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
+    let listener = tokio::net::TcpListener::bind(opts.http_addr)
         .await
-        .with_context(|| format!("Failed to bind to HTTP_ADDR '{}'", state.opts.http_addr))?;
-    info!("HTTP server listening on http://{}", state.opts.http_addr);
+        .with_context(|| format!("Failed to bind to HTTP_ADDR '{}'", opts.http_addr))?;
+    info!("HTTP server listening on http://{}", opts.http_addr);
 
     let middleware = ServiceBuilder::new()
         .compression()
@@ -45,7 +49,7 @@ pub async fn main(state: AppState) -> Result<()> {
             .merge(pages_router(&state))
             .nest("/api", api_router(&state))
             .fallback_service(
-                ServeDir::new(state.opts.http_site_root.clone())
+                ServeDir::new(opts.http_site_root.clone())
                     .fallback(response_not_found.with_state(state.clone())),
             )
             .layer(middleware)

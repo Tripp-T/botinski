@@ -60,15 +60,13 @@ type AppState = Arc<AppStateInner>;
 struct AppStateInner {
     config: ConfigManager,
     db: DBManager,
-    opts: Opts,
     shutdown_token: CancellationToken,
 }
 impl AppStateInner {
-    pub async fn new(opts: Opts) -> Result<Self> {
+    pub async fn new(opts: &Opts) -> Result<Self> {
         Ok(AppStateInner {
-            config: ConfigManager::new(&opts)?,
-            db: DBManager::new(&opts).await?,
-            opts,
+            config: ConfigManager::new(opts)?,
+            db: DBManager::new(opts).await?,
             shutdown_token: CancellationToken::new(),
         })
     }
@@ -93,13 +91,21 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     info!("Starting application");
-    let opts = Opts::parse();
-    let state: AppState = Arc::new(AppStateInner::new(opts).await?);
+    let opts = Arc::new(Opts::parse());
+    let state: AppState = Arc::new(AppStateInner::new(&opts).await?);
 
     let mut thread_pool = JoinSet::new();
     wrap_thread(&mut thread_pool, shutdown_signal(state.clone()), "Core");
-    wrap_thread(&mut thread_pool, http::main(state.clone()), "HTTP");
-    wrap_thread(&mut thread_pool, discord::main(state.clone()), "Discord");
+    wrap_thread(
+        &mut thread_pool,
+        http::main(state.clone(), opts.clone()),
+        "HTTP",
+    );
+    wrap_thread(
+        &mut thread_pool,
+        discord::main(state.clone(), opts.clone()),
+        "Discord",
+    );
 
     let mut threads_with_error = 0usize;
     while let Some(thread_result) = thread_pool.join_next().await {
