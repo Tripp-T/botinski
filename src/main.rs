@@ -110,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
         match thread_result {
             Ok((name, Ok(()))) => info!("thread '{name}' exited cleanly"),
             Ok((name, Err(e))) => {
-                error!("thread '{name}' exited with error: {e}");
+                error!("thread '{name}' exited with error: {e:?}");
                 threads_with_error += 1;
                 if let Err(e) = state.shutdown().await {
                     error!("{e}")
@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
                 continue;
             }
             Err(e) => {
-                error!("thread panicked: {e}");
+                error!("thread panicked: {e:?}");
                 threads_with_error += 1;
                 if let Err(e) = state.shutdown().await {
                     error!("{e}")
