@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id AS \"id: Uuid\",\n                hashed_token,\n                user_id AS \"user_id: Uuid\",\n                user_agent,\n                ip,\n                created_at AS \"created_at: DateTime<Utc>\",\n                expires_at AS \"expires_at: DateTime<Utc>\"\n            FROM sessions\n            WHERE id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: Uuid",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "hashed_token",
+        "ordinal": 1,
+        "type_info": "Blob"
+      },
+      {
+        "name": "user_id: Uuid",
+        "ordinal": 2,
+        "type_info": "Blob"
+      },
+      {
+        "name": "user_agent",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "ip",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at: DateTime<Utc>",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "expires_at: DateTime<Utc>",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "165fd65726e37a17d612374a6a0a802095e64feea9e62d3cbc45d43bd3e43f69"
+}

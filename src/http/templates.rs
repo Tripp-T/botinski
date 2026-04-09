@@ -1,6 +1,5 @@
 use {
     crate::{AppState, http::HttpError, models::user::AppUser},
-    anyhow::bail,
     axum::{RequestPartsExt, extract::FromRequestParts, response::Html},
     maud::{Markup, html},
     tower_cookies::Cookies,
@@ -50,15 +49,17 @@ impl FromRequestParts<AppState> for TemplateBase {
     type Rejection = HttpError;
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
-        _state: &AppState,
+        state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let Some(key) = parts.extensions.get::<tower_cookies::Key>() else {
-            return Err(HttpError::Internal("Missing cookie key".to_string()));
-        };
         let cookies = parts.extract::<Cookies>().await.map_err(|(_, e)| {
             error!("Failed to parse cookies from request: {e}");
             HttpError::BadRequest("Failed to parse cookies from request".to_string())
         })?;
+        let user = match parts.extract_with_state::<AppUser, _>(state).await {
+            Ok(u) => Some(u),
+            Err(HttpError::Unauthorized) => None,
+            Err(e) => return Err(e),
+        };
         let dark_theme = cookies
             .get("dark_theme")
             .map(|mut cookie| match cookie.value().parse::<bool>() {
@@ -74,7 +75,7 @@ impl FromRequestParts<AppState> for TemplateBase {
         Ok(Self {
             dark_theme,
             title: None,
-            user: None,
+            user,
         })
     }
 }
