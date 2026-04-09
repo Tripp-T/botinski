@@ -1,15 +1,17 @@
 use {
-    crate::AppState,
-    axum::{RequestPartsExt, extract::FromRequestParts, http::StatusCode, response::Html},
+    crate::{AppState, http::HttpError, models::user::AppUser},
+    anyhow::bail,
+    axum::{RequestPartsExt, extract::FromRequestParts, response::Html},
     maud::{Markup, html},
     tower_cookies::Cookies,
     tracing::error,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TemplateBase {
     dark_theme: bool,
     title: Option<String>,
+    user: Option<AppUser>,
 }
 impl TemplateBase {
     pub fn set_title<S: AsRef<str>>(mut self, title: S) -> Self {
@@ -45,14 +47,17 @@ impl TemplateBase {
     }
 }
 impl FromRequestParts<AppState> for TemplateBase {
-    type Rejection = StatusCode;
+    type Rejection = HttpError;
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         _state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let cookies = parts.extract::<Cookies>().await.map_err(|(s, e)| {
+        let Some(key) = parts.extensions.get::<tower_cookies::Key>() else {
+            return Err(HttpError::Internal("Missing cookie key".to_string()));
+        };
+        let cookies = parts.extract::<Cookies>().await.map_err(|(_, e)| {
             error!("Failed to parse cookies from request: {e}");
-            s
+            HttpError::BadRequest("Failed to parse cookies from request".to_string())
         })?;
         let dark_theme = cookies
             .get("dark_theme")
@@ -69,20 +74,7 @@ impl FromRequestParts<AppState> for TemplateBase {
         Ok(Self {
             dark_theme,
             title: None,
+            user: None,
         })
-    }
-}
-
-/// Returns a html component
-pub fn template_error<S: AsRef<str>>(title: S, description: S) -> maud::Markup {
-    html! {
-        div class="flex flex-col text-center m-auto w-full max-w-xl border border-gray-500 rounded-md p-4" {
-            div class="text-xl text-red-500 border-b font-bold pb-2" {
-                (title.as_ref())
-            }
-            p class="pt-4" {
-                (description.as_ref())
-            }
-        }
     }
 }

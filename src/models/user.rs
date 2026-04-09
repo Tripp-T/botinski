@@ -1,13 +1,16 @@
 use anyhow::Context;
+use axum::{RequestPartsExt, extract::FromRequestParts};
 use sqlx::{SqlitePool, prelude::FromRow};
 use uuid::Uuid;
 
-#[derive(FromRow, Debug)]
+use crate::{AppState, http::HttpError, models::session::AppSession};
+
+#[derive(FromRow, Debug, Clone)]
 pub struct AppUser {
     pub id: Uuid,
     discord_id: String,
-    name: String,
-    email: String,
+    pub name: String,
+    pub email: String,
 }
 impl AppUser {
     pub async fn insert(
@@ -68,5 +71,18 @@ impl AppUser {
             .parse::<u64>()
             .context("Failed to parse user discord_id to u64??")?
             .into())
+    }
+}
+impl FromRequestParts<AppState> for AppUser {
+    type Rejection = HttpError;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let session = parts.extract_with_state::<AppSession, _>(state).await?;
+        AppUser::get_by_id(&state.db, session.user_id)
+            .await
+            .context("Failed to lookup session user")?
+            .ok_or(HttpError::Unauthorized)
     }
 }

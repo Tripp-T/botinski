@@ -9,25 +9,31 @@ dev = ["tower-livereload"]
 [dependencies]
 anyhow = "1.0.102"
 axum = { version = "0.8.8", features = ["macros"] }
+base64 = "0.22.1"
+chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.6.0", features = ["derive", "env"] }
 enum_dispatch = "0.3.13"
 maud = { version = "0.27.0", features = ["axum"] }
 poise = "0.6.1"
+rand = "0.10.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+sha2 = "0.11.0"
 sqlx = { version = "0.8.6", features = [
   "macros",
   "sqlite",
   "runtime-tokio",
   "uuid",
+  "chrono",
 ] }
 strum = { version = "0.28.0", features = ["derive"] }
+subtle = "2.6.1"
 thiserror = "2.0.18"
 tokio = { version = "1.51.0", features = ["full"] }
 tokio-util = "0.7.18"
 toml = "1.1.2"
 tower = { version = "0.5.3", features = ["full"] }
-tower-cookies = "0.11.0"
+tower-cookies = { version = "0.11.0", features = ["private", "signed"] }
 tower-http = { version = "0.6.8", features = ["fs", "full"] }
 tower-livereload = { version = "0.10.3", optional = true }
 tracing = "0.1.44"
