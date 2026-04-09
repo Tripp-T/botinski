@@ -37,7 +37,7 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
             },
             commands: {
                 use commands::*;
-                vec![age(), ping(), shutdown()]
+                vec![age(), ping(), shutdown(), roll(), coin_flip()]
             },
             event_handler: |ctx, event, framework, data| {
                 Box::pin(event_handler(ctx, event, framework, data))
