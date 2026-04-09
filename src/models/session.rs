@@ -60,7 +60,7 @@ impl AppSession {
 
         Ok((session, token_base64))
     }
-    pub async fn get_by_id(id: Uuid, pool: &SqlitePool) -> Result<Option<Self>, sqlx::Error> {
+    pub async fn get_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as!(
             AppSession,
             r#"
@@ -79,6 +79,17 @@ impl AppSession {
         )
         .fetch_optional(pool)
         .await
+    }
+    pub async fn delete_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<()>, sqlx::Error> {
+        sqlx::query!(
+            r#"
+            DELETE FROM sessions WHERE id = ?
+            "#,
+            id
+        )
+        .fetch_optional(pool)
+        .await
+        .map(|o| o.map(|_| ()))
     }
 }
 impl FromRequestParts<AppState> for AppSession {
@@ -103,7 +114,7 @@ impl FromRequestParts<AppState> for AppSession {
         };
         let session_cookie_value = AppSessionCookie::from_cookie_str(session_cookie.value())?;
 
-        let Some(db_session) = Self::get_by_id(session_cookie_value.id, &state.db)
+        let Some(db_session) = Self::get_by_id(&state.db, session_cookie_value.id)
             .await
             .context("Failed to query for session")?
         else {

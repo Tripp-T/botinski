@@ -1,6 +1,10 @@
 use crate::{
     AppState,
-    http::{HttpError, components::component_card, templates::TemplateBase},
+    http::{
+        HttpError,
+        components::{ButtonProps, PropColor, component_button, component_card},
+        templates::TemplateBase,
+    },
     models::user::AppUser,
 };
 use axum::{Router, debug_handler, extract::State, response::IntoResponse, routing::get};
@@ -29,7 +33,17 @@ async fn page_profile(
     tmpl: TemplateBase,
     user: AppUser,
 ) -> impl IntoResponse {
-    tmpl.set_title("Profile").render(html! {
-        h1."text-xl" { "Welcome to your profile, " (user.name) }
-    })
+    tmpl.set_title("Profile").render(component_card(
+        format!("{}'s Profile", user.name),
+        html! {
+            (component_button(ButtonProps {
+                color: PropColor::Red,
+                hx_get: Some("/api/oauth/logout"),
+                hx_target: Some("body"),
+                class: Some("w-full"),
+                ..Default::default()
+            }, "Logout"))
+        },
+        false,
+    ))
 }

@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use crate::{
     AppState,
     http::{HttpError, components::component_card, templates::TemplateBase},
@@ -10,6 +8,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use std::time::Instant;
 use tracing::{Instrument, debug, error, info_span};
 
 #[debug_middleware]

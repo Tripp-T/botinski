@@ -20,12 +20,13 @@ use oauth2::TokenResponse;
 use poise::serenity_prelude;
 use serde::Deserialize;
 use tower_cookies::{Cookie, Cookies};
-use tracing::warn;
+use tracing::{error, warn};
 
 pub fn api_router(_state: &AppState) -> Router<AppState> {
     Router::new()
         .route("/healthcheck", get(healthcheck))
         .route("/oauth/login", get(oauth_login))
+        .route("/oauth/logout", get(oauth_logout))
         .route("/oauth/callback", get(oauth_callback))
 }
 
@@ -134,4 +135,22 @@ async fn oauth_callback(
         cookie
     });
     Ok(Redirect::to("/profile").into_response())
+}
+
+#[debug_handler]
+async fn oauth_logout(
+    State(state): State<AppState>,
+    cookies: Cookies,
+    Extension(cookie_key): Extension<tower_cookies::Key>,
+    session: AppSession,
+) -> Result<Redirect, HttpError> {
+    if let Err(e) = AppSession::delete_by_id(&state.db, session.id).await {
+        error!("Failed to delete session: {e}");
+    }
+    let private_cookies = cookies.private(&cookie_key);
+    private_cookies
+        .get("user-session")
+        .context("Missing session cookie for logged in user?")?
+        .make_removal();
+    Ok(Redirect::to("/"))
 }
