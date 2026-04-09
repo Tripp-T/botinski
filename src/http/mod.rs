@@ -7,9 +7,7 @@ use crate::{
     },
 };
 use anyhow::{Context, Result};
-use axum::{
-    Extension, Router, ServiceExt, handler::Handler, http::StatusCode, response::IntoResponse,
-};
+use axum::{Extension, Router, handler::Handler, http::StatusCode, response::IntoResponse};
 use base64::Engine;
 use std::{net::SocketAddr, sync::Arc};
 use tower::ServiceBuilder;

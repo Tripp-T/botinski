@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use anyhow::Context;
 use oauth2::{
     AuthUrl, ClientId, ClientSecret, CsrfToken, EndpointNotSet, EndpointSet, RedirectUrl, Scope,

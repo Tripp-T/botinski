@@ -33,11 +33,11 @@ impl TemplateBase {
                 }
                 body class="dark:bg-gray-950 dark:text-white bg-gray-100" {
                     nav class="w-full py-1 flex border-b border-gray-500" {
-                        div class="px-2 w-full max-w-3xl mx-auto" hx-boost="true" {
+                        div class="px-2 w-full max-w-3xl mx-auto flex flex-row" hx-boost="true" {
                             a href="/" { "Home" }
                             div class="ml-auto" {
-                                @if let Some(user) = &self.user {
-                                    p { "Hello, " (user.name) }
+                                @if self.user.is_some() {
+                                    a href="/profile" { "Profile" }
                                 } @else {
                                     a href="/api/oauth/login" hx-boost="false" {"Login"}
                                 }
