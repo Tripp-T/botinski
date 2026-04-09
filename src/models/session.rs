@@ -31,9 +31,8 @@ impl AppSession {
         user_agent: String,
         ip: IpAddr,
     ) -> Result<(Self, String), sqlx::Error> {
-        let mut rng = rand::rng();
         let mut token_bytes = [0u8; 32];
-        rng.fill(&mut token_bytes);
+        rand::rng().fill(&mut token_bytes);
         let token_hash = Sha256::digest(token_bytes).to_vec();
         let token_base64 = BASE64_URL_SAFE_NO_PAD.encode(token_bytes);
         let now = Utc::now();
@@ -88,6 +87,10 @@ impl FromRequestParts<AppState> for AppSession {
         parts: &mut axum::http::request::Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
+        if let Some(session) = parts.extensions.get::<Self>().cloned() {
+            return Ok(session);
+        }
+
         let Some(cookie_key) = parts.extensions.get::<tower_cookies::Key>().cloned() else {
             return Err(HttpError::Internal("Missing cookie key".to_string()));
         };
@@ -135,19 +138,21 @@ impl FromRequestParts<AppState> for AppSession {
             return Err(HttpError::Unauthorized);
         }
 
+        parts.extensions.insert(db_session.clone());
+
         Ok(db_session)
     }
 }
 
-struct AppSessionCookie {
+pub struct AppSessionCookie {
     id: Uuid,
     token: String,
 }
 impl AppSessionCookie {
-    fn new(id: Uuid, token: String) -> Self {
+    pub fn new(id: Uuid, token: String) -> Self {
         Self { id, token }
     }
-    fn from_cookie_str(cookie_str: &str) -> anyhow::Result<Self> {
+    pub fn from_cookie_str(cookie_str: &str) -> anyhow::Result<Self> {
         let Some((id, token)) = cookie_str.split_once(':') else {
             bail!("Missing ID token separator")
         };
@@ -156,7 +161,7 @@ impl AppSessionCookie {
             token: token.to_string(),
         })
     }
-    fn to_cookie_value(&self) -> String {
+    pub fn to_cookie_value(&self) -> String {
         format!("{}:{}", self.id, self.token)
     }
 }

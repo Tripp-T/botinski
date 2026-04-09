@@ -7,12 +7,14 @@ use crate::{
     },
 };
 use anyhow::{Context, Result};
-use axum::{Extension, Router, handler::Handler, http::StatusCode, response::IntoResponse};
+use axum::{
+    Extension, Router, ServiceExt, handler::Handler, http::StatusCode, response::IntoResponse,
+};
 use base64::Engine;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
-use tower_http::{compression::CompressionLayer, services::ServeDir, trace::TraceLayer};
+use tower_http::{compression::CompressionLayer, services::ServeDir};
 #[cfg(feature = "dev")]
 use tower_livereload::LiveReloadLayer;
 use tracing::{debug, info};
@@ -66,7 +68,8 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
                     )),
             )
             .layer(Extension(cookie_key))
-            .with_state(state.clone()),
+            .with_state(state.clone())
+            .into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(await_shutdown_signal(state))
     .await

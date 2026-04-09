@@ -13,24 +13,29 @@ pub struct AppUser {
     pub email: String,
 }
 impl AppUser {
-    pub async fn insert(
+    pub async fn new(
         pool: &SqlitePool,
         discord_id: poise::serenity_prelude::all::UserId,
         name: String,
         email: String,
-    ) -> Result<Uuid, sqlx::Error> {
-        let discord_id = discord_id.get().to_string();
-        let new_id = Uuid::new_v4();
+    ) -> Result<Self, sqlx::Error> {
+        let user = AppUser {
+            id: Uuid::new_v4(),
+            discord_id: discord_id.to_string(),
+            name,
+            email,
+        };
+
         sqlx::query!(
             "INSERT INTO users (id, discord_id, name, email) VALUES (?, ?, ?, ?)",
-            new_id,
-            discord_id,
-            name,
-            email
+            user.id,
+            user.discord_id,
+            user.name,
+            user.email
         )
         .execute(pool)
         .await
-        .map(|_| new_id)
+        .map(|_| user)
     }
     pub async fn get_by_id(
         pool: &SqlitePool,
@@ -79,10 +84,15 @@ impl FromRequestParts<AppState> for AppUser {
         parts: &mut axum::http::request::Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
+        if let Some(user) = parts.extensions.get::<AppUser>() {
+            return Ok(user.clone());
+        }
         let session = parts.extract_with_state::<AppSession, _>(state).await?;
-        AppUser::get_by_id(&state.db, session.user_id)
+        let user = AppUser::get_by_id(&state.db, session.user_id)
             .await
             .context("Failed to lookup session user")?
-            .ok_or(HttpError::Unauthorized)
+            .ok_or(HttpError::Unauthorized)?;
+        parts.extensions.insert(user.clone());
+        Ok(user)
     }
 }

@@ -21,6 +21,7 @@ pub async fn middleware_error_formatting(
 ) -> Response {
     let mut response = next.run(req).await;
     if let Some(error) = response.extensions_mut().remove::<HttpError>() {
+        error!("{error}");
         return (
             error.as_status(),
             tmpl.set_title(error.title()).render(component_card(

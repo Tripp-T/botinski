@@ -35,6 +35,13 @@ impl TemplateBase {
                     nav class="w-full py-1 flex border-b border-gray-500" {
                         div class="px-2 w-full max-w-3xl mx-auto" hx-boost="true" {
                             a href="/" { "Home" }
+                            div class="ml-auto" {
+                                @if let Some(user) = &self.user {
+                                    p { "Hello, " (user.name) }
+                                } @else {
+                                    a href="/api/oauth/login" hx-boost="false" {"Login"}
+                                }
+                            }
                         }
                     }
                     div id="content" class="p-2" {
