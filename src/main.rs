@@ -88,11 +88,7 @@ impl AppStateInner {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("botinski=info")),
-        )
-        .init();
+    init_logging();
     info!("Starting application");
     let opts = Arc::new(Opts::parse());
     let state: AppState = Arc::new(AppStateInner::new(&opts).await?);
@@ -182,4 +178,35 @@ async fn shutdown_signal(state: AppState) -> Result<()> {
         },
     }
     state.shutdown().await
+}
+
+fn init_logging() {
+    let fmt = tracing_subscriber::fmt().with_env_filter(
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("botinski=info")),
+    );
+
+    #[cfg(feature = "dev")]
+    let fmt = fmt.pretty();
+
+    fmt.init();
+
+    // Log panics to tracing
+    std::panic::set_hook(Box::new(|panic_info| {
+        let location = panic_info.location().unwrap();
+        let msg = match panic_info.payload().downcast_ref::<&'static str>() {
+            Some(s) => *s,
+            None => match panic_info.payload().downcast_ref::<String>() {
+                Some(s) => &s[..],
+                None => "Box<dyn Any>",
+            },
+        };
+        tracing::error!(
+            target: "panic",
+            file = location.file(),
+            line = location.line(),
+            "thread '{}' panicked at '{}'",
+            std::thread::current().name().unwrap_or("<unnamed>"),
+            msg
+        );
+    }));
 }
