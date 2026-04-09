@@ -1,6 +1,9 @@
 _default:
   @just --list
 
+run:
+  cargo run --features dev
+
 dev:
   cargo watch -x 'run --features dev' --ignore data
 
