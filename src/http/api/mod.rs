@@ -130,6 +130,7 @@ async fn oauth_callback(
             AppSessionCookie::new(session.id, session_token).to_cookie_value(),
         );
         cookie.set_expires(time::OffsetDateTime::now_utc() + time::Duration::days(15));
+        cookie.set_path("/");
         cookie
     });
     Ok(Redirect::to("/profile").into_response())
