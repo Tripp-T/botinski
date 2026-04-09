@@ -9,6 +9,15 @@ A modular, multi-platform bot framework written in Rust. Currently a work in pro
 - `sqlx-cli` — for managing database migrations
 - `just` — optional, for migration shortcuts
 
+### Getting started
+
+This project uses git hooks to keep .sqlx metadata current for queries.
+Run the following command to have this hook run on commit.
+
+```sh
+git config core.hooksPath .githooks
+```
+
 ### With Nix (recommended)
 
 ```sh

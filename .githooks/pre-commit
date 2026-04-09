@@ -1,0 +1,10 @@
+#!/bin/bash
+
+echo "--- Running cargo sqlx prepare ---"
+if cargo sqlx prepare -- --all-targets --all-features; then
+    git add .sqlx
+    echo "--- SQLx cache completed and staged if modified ---"
+else
+    echo "--- ERROR: sqlx prepare failed. Commit aborted. ---"
+    exit 1
+fi
