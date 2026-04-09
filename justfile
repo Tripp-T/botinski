@@ -4,6 +4,9 @@ _default:
 dev:
   cargo watch -x 'run --features dev' --ignore data
 
+clippy:
+  cargo watch -x 'clippy' --ignore data
+
 new_migration name:
   sqlx migrate add -r {{name}}
 
