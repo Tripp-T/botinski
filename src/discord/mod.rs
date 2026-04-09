@@ -87,7 +87,7 @@ async fn event_handler(
             info!(
                 "Invite URL: https://discord.com/oauth2/authorize?client_id={}&scope=bot&permissions={}",
                 data_about_bot.application.id,
-                INTENTS.bits()
+                (Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES).bits()
             );
             Ok(())
         }
