@@ -148,7 +148,7 @@ pub async fn coin_flip(ctx: Context<'_>) -> Result<(), Error> {
             false => "tails",
         }
     };
-    ctx.reply(format!("The coin landed on {result}"))
+    ctx.reply(format!("The coin landed with **{result}** on top"))
         .await
         .context("Failed to respond")?;
     Ok(())
