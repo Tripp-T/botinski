@@ -1,5 +1,5 @@
 use crate::{AppState, Opts};
-use anyhow::{Context as AnyhowContext, Result};
+use anyhow::{Context as AnyhowContext, Result, anyhow};
 use poise::{PrefixFrameworkOptions, serenity_prelude::*};
 use std::sync::{Arc, LazyLock};
 use tracing::{debug, info};
@@ -15,6 +15,19 @@ static INTENTS: LazyLock<GatewayIntents> = LazyLock::new(|| {
 
 type Error = anyhow::Error;
 type Context<'a> = poise::Context<'a, AppState, Error>;
+
+pub struct DiscordHttpCache {
+    http: Arc<poise::serenity_prelude::Http>,
+    cache: Arc<poise::serenity_prelude::Cache>,
+}
+impl CacheHttp for DiscordHttpCache {
+    fn cache(&self) -> Option<&Arc<Cache>> {
+        Some(&self.cache)
+    }
+    fn http(&self) -> &Http {
+        &self.http
+    }
+}
 
 pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
     let framework_state = state.clone();
@@ -46,6 +59,15 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
+                if framework_state.discord_http.get().is_none() {
+                    framework_state
+                        .discord_http
+                        .set(DiscordHttpCache {
+                            http: ctx.http.clone(),
+                            cache: ctx.cache.clone(),
+                        })
+                        .map_err(|e| anyhow!("Failed to share discord http cache: {e}"))?;
+                }
                 if !discord_skip_register_commands.as_ref() {
                     poise::builtins::register_globally(ctx, &framework.options().commands)
                         .await

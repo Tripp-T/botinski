@@ -1,10 +1,11 @@
-use crate::{config::ConfigManager, db::DBManager, oauth::OauthManager};
+use crate::{config::ConfigManager, db::DBManager, discord::DiscordHttpCache, oauth::OauthManager};
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::{
     signal,
+    sync::OnceCell,
     task::{AbortHandle, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
@@ -70,6 +71,7 @@ struct AppStateInner {
     config: ConfigManager,
     db: DBManager,
     oauth: OauthManager,
+    discord_http: OnceCell<DiscordHttpCache>,
     shutdown_token: CancellationToken,
 }
 impl AppStateInner {
@@ -78,6 +80,7 @@ impl AppStateInner {
             config: ConfigManager::new(opts)?,
             db: DBManager::new(opts).await?,
             oauth: OauthManager::new(opts)?,
+            discord_http: OnceCell::new(),
             shutdown_token: CancellationToken::new(),
         })
     }
@@ -91,6 +94,11 @@ impl AppStateInner {
         self.config.shutdown().await?;
 
         Ok(())
+    }
+    pub fn discord_http(&self) -> Result<&DiscordHttpCache> {
+        self.discord_http
+            .get()
+            .context("Failed to get shared discord http cache")
     }
 }
 
