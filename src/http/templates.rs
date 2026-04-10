@@ -19,10 +19,23 @@ impl TemplateBase {
         self
     }
     pub fn render(&self, body: Markup) -> Html<Markup> {
-        let nav_link = |title: &str, path: &str| -> maud::Markup {
+        struct NavLinkProps {
+            hx_boost: bool,
+        }
+        impl Default for NavLinkProps {
+            fn default() -> Self {
+                Self { hx_boost: true }
+            }
+        }
+        let nav_link = |title: &str, path: &str, props: NavLinkProps| -> maud::Markup {
             let is_active = self.path == path;
             html! {
-                a href=(path) data-active?[is_active] class="border-b border-gray-500 data-[active=true]:border-gray-300" {(title)}
+                a
+                    hx-boost=(props.hx_boost)
+                    href=(path)
+                    data-active?[is_active]
+                    class="border-b border-gray-500 data-[active=true]:border-gray-300"
+                {(title)}
             }
         };
         Html(html! {
@@ -41,16 +54,18 @@ impl TemplateBase {
                     nav class="w-full py-1 flex border-b border-gray-500" {
                         div class="px-2 w-full max-w-3xl mx-auto flex flex-row" hx-boost="true" {
                             div class="flex flex-row space-x-2" {
-                                (nav_link("Home", "/"))
+                                (nav_link("Home", "/", NavLinkProps::default()))
                                 @if self.user.is_some() {
-
+                                    (nav_link("Guilds", "/guilds", NavLinkProps::default()))
                                 }
                             }
                             div class="ml-auto" {
                                 @if self.user.is_some() {
-                                    (nav_link("Profile", "/profile"))
+                                    (nav_link("Profile", "/profile", NavLinkProps::default()))
                                 } @else {
-                                    a href="/api/oauth/login" hx-boost="false" {"Login"}
+                                    (nav_link("Login", "/api/oauth/login", NavLinkProps {
+                                        hx_boost: false,
+                                    }))
                                 }
                             }
                         }
