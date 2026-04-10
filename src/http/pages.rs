@@ -2,7 +2,7 @@ use crate::{
     AppState,
     http::{
         HttpError,
-        components::{ButtonProps, PropColor, component_button, component_card},
+        components::{ButtonColor, ButtonProps, component_button, component_card},
         templates::TemplateBase,
     },
     models::user::AppUser,
@@ -37,7 +37,7 @@ async fn page_profile(
         format!("{}'s Profile", user.name),
         html! {
             (component_button(ButtonProps {
-                color: PropColor::Red,
+                color: ButtonColor::Red,
                 hx_get: Some("/api/oauth/logout"),
                 hx_target: Some("body"),
                 class: Some("w-full"),

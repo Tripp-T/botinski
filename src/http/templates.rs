@@ -8,6 +8,7 @@ use {
 
 #[derive(Clone, Default)]
 pub struct TemplateBase {
+    path: String,
     dark_theme: bool,
     title: Option<String>,
     user: Option<AppUser>,
@@ -18,15 +19,20 @@ impl TemplateBase {
         self
     }
     pub fn render(&self, body: Markup) -> Html<Markup> {
+        let nav_link = |title: &str, path: &str| -> maud::Markup {
+            let is_active = self.path == path;
+            html! {
+                a href=(path) data-active?[is_active] class="border-b border-gray-500 data-[active=true]:border-gray-300" {(title)}
+            }
+        };
         Html(html! {
             (maud::DOCTYPE)
-
-            html lang="en" class=@if self.dark_theme {"dark"} @else {""}   {
+            html."dark"[self.dark_theme] lang="en" {
                 head {
                     meta charset="UTF-8" {}
                     meta name="viewport" content="width=device-width, initial-scale=1.0" {}
                     title {
-                        @if let Some(title) = &self.title { (title) } @else { "" }
+                        @if let Some(title) = &self.title { (title) " | botinski" } @else { "botinski" }
                     }
                     script src="/htmx.2.0.8.min.js" {}
                     link href="/output.css" rel="stylesheet" {}
@@ -34,10 +40,15 @@ impl TemplateBase {
                 body class="dark:bg-gray-950 dark:text-white bg-gray-100" {
                     nav class="w-full py-1 flex border-b border-gray-500" {
                         div class="px-2 w-full max-w-3xl mx-auto flex flex-row" hx-boost="true" {
-                            a href="/" { "Home" }
+                            div class="flex flex-row space-x-2" {
+                                (nav_link("Home", "/"))
+                                @if self.user.is_some() {
+
+                                }
+                            }
                             div class="ml-auto" {
                                 @if self.user.is_some() {
-                                    a href="/profile" { "Profile" }
+                                    (nav_link("Profile", "/profile"))
                                 } @else {
                                     a href="/api/oauth/login" hx-boost="false" {"Login"}
                                 }
@@ -80,6 +91,7 @@ impl FromRequestParts<AppState> for TemplateBase {
             // no cookie is set, default to true
             .unwrap_or(true);
         Ok(Self {
+            path: parts.uri.path().to_string(),
             dark_theme,
             title: None,
             user,

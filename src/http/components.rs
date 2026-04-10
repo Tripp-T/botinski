@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use maud::html;
 
 /// Returns a html component
@@ -21,7 +19,7 @@ pub fn component_card(
 }
 
 #[derive(Default)]
-pub enum PropColor {
+pub enum ButtonColor {
     None,
     Gray,
     #[default]
@@ -29,14 +27,14 @@ pub enum PropColor {
     Red,
     Yellow,
 }
-impl PropColor {
+impl ButtonColor {
     fn as_class(&self) -> &'static str {
         match self {
             Self::None => "",
-            Self::Gray => "bg-gray-500",
-            Self::Blue => "bg-blue-500",
-            Self::Red => "bg-red-500",
-            Self::Yellow => "bg-yellow-500",
+            Self::Gray => "bg-gray-500 hover:bg-gray-700",
+            Self::Blue => "bg-blue-500 hover:bg-blue-700",
+            Self::Red => "bg-red-500 hover:bg-red-700",
+            Self::Yellow => "bg-yellow-500 hover:bg-yellow-700",
         }
     }
 }
@@ -46,28 +44,54 @@ pub struct ButtonProps<'a> {
     pub id: Option<&'a str>,
     pub class: Option<&'a str>,
     pub disabled: bool,
-    pub color: PropColor,
+    pub color: ButtonColor,
     pub hx_get: Option<&'a str>,
     pub hx_post: Option<&'a str>,
     pub hx_target: Option<&'a str>,
 }
 
 pub fn component_button(props: ButtonProps<'_>, content: impl maud::Render) -> maud::Markup {
-    let classes = format!(
-        "rounded-md border px-2 {} {}",
-        props.color.as_class(),
-        props.class.unwrap_or_default()
-    );
     html! {
         button
             id=[props.id]
-            class=(classes)
+            class={
+                "rounded-md border px-2 cursor-pointer transition-colors "
+                (props.color.as_class())
+                " "
+                (props.class.unwrap_or_default())
+            }
             disabled?[props.disabled]
             hx-get=[props.hx_get]
             hx-post=[props.hx_post]
             hx-target=[props.hx_target]
          {
             (content)
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct InputProps<'a> {
+    pub id: Option<&'a str>,
+    pub class: Option<&'a str>,
+    pub disabled: bool,
+    pub value: Option<&'a str>,
+    pub placeholder: Option<&'a str>,
+}
+
+pub fn component_input(props: InputProps) -> maud::Markup {
+    html! {
+        input
+            id=[props.id]
+            class={
+                "rounded-md border px-2 "
+                (props.class.unwrap_or_default())
+            }
+            disabled?[props.disabled]
+            value=[props.value]
+            placeholder=[props.placeholder]
+        {
+
         }
     }
 }
