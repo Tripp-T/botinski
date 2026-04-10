@@ -119,33 +119,16 @@ async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
         return Ok(true);
     }
 
-    let Some(admin_role_ids) = config.admin_roles.as_ref() else {
-        // no admin roles to check against
-        ctx.reply("Permission denied")
+    if let Some(admin_role_ids) = config.admin_roles.as_ref() {
+        let is_admin_role_member = ctx
+            .author_member()
             .await
-            .context("Failed to reply")?;
-        return Ok(false);
+            .map(|m| m.roles.iter().any(|rid| admin_role_ids.contains(rid)))
+            .unwrap_or(false);
+        if is_admin_role_member {
+            return Ok(true);
+        }
     };
-    let Some(guild) = ctx.guild().map(|g| g.id) else {
-        // is not in admin list and not in a guild to cross-check roles against
-        ctx.reply("Permission denied")
-            .await
-            .context("Failed to reply")?;
-        return Ok(false);
-    };
-
-    let author_membership = guild
-        .member(&ctx, author.id)
-        .await
-        .context("Failed to fetch author guild membership")?;
-
-    if author_membership
-        .roles
-        .iter()
-        .any(|rid| admin_role_ids.contains(rid))
-    {
-        return Ok(true);
-    }
 
     ctx.reply("Permission denied")
         .await
