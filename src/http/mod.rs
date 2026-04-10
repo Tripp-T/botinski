@@ -24,7 +24,15 @@ mod pages;
 mod templates;
 
 async fn await_shutdown_signal(state: AppState) {
+    use tokio::time;
+    let start = time::Instant::now();
     state.shutdown_token.cancelled().await;
+    // ensure some time has elapsed since the function starts to allow the function caller to properly receive the shutdown signal
+    let min_duration = time::Duration::from_millis(500);
+    let elapsed = start.elapsed();
+    if elapsed < min_duration {
+        time::sleep(min_duration - elapsed).await
+    }
     debug!("Received shutdown event")
 }
 

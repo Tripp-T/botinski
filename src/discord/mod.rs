@@ -68,7 +68,16 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
     let shard_manager = client.shard_manager.clone();
     let shutdown_token = state.shutdown_token.clone();
     tokio::spawn(async move {
+        use tokio::time;
+        let start = time::Instant::now();
         shutdown_token.cancelled().await;
+        // ensure some time has elapsed since the function starts to allow the function caller to properly receive the shutdown signal
+        let min_duration = time::Duration::from_millis(500);
+        let elapsed = start.elapsed();
+        if elapsed < min_duration {
+            time::sleep(min_duration - elapsed).await
+        }
+        debug!("Received shutdown event");
         shard_manager.shutdown_all().await;
     });
 
