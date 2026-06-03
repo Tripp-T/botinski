@@ -144,6 +144,24 @@
               inherit (p) cargoArtifacts;
             }
           );
+          # Verifies the committed .sqlx/ cache matches the queries in the source.
+          # Builds a throwaway sqlite in the sandbox, runs migrations, then has
+          # sqlx-cli re-derive the metadata and diff it against .sqlx/.
+          sqlx-prepare = p.craneLib.mkCargoDerivation (
+            p.commonArgs
+            // {
+              inherit (p) cargoArtifacts;
+              pnameSuffix = "-sqlx-prepare-check";
+              nativeBuildInputs = p.commonArgs.nativeBuildInputs ++ [ pkgs.sqlx-cli ];
+              SQLX_OFFLINE = "false";
+              buildPhaseCargoCommand = ''
+                export DATABASE_URL="sqlite://$PWD/sqlx-check.db?mode=rwc"
+                sqlx database create
+                sqlx migrate run
+                cargo sqlx prepare --check -- --all-targets --all-features
+              '';
+            }
+          );
         }
       );
 

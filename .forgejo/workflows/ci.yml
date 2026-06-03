@@ -16,10 +16,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      # Compile sqlx queries against the committed .sqlx/ cache by default;
-      # the prepare-check step sets its own DATABASE_URL.
-      SQLX_OFFLINE: "true"
 
     steps:
       - name: Checkout repository
@@ -38,17 +34,8 @@ jobs:
           restore-keys: |
             nix-${{ runner.os }}-
 
-      - name: nix flake check (fmt + clippy + test)
+      - name: nix flake check (fmt + clippy + test + sqlx-prepare)
         run: nix flake check
-
-      - name: Verify .sqlx is in sync with the queries
-        run: |
-          export DATABASE_URL="sqlite:///tmp/sqlx-check.db?mode=rwc"
-          nix develop --command bash -c "
-            sqlx database create &&
-            sqlx migrate run &&
-            cargo sqlx prepare --check -- --all-targets --all-features
-          "
 
   build-and-push:
     needs: check
