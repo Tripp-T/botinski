@@ -57,8 +57,14 @@ pub async fn play(
         ctx.reply(format!("Queued **{}** track(s){}", result.added, from))
             .await?;
     } else {
-        let track =
-            music::enqueue(ctx.data(), guild_id, Some(voice_channel_id), query, requester).await?;
+        let track = music::enqueue(
+            ctx.data(),
+            guild_id,
+            Some(voice_channel_id),
+            query,
+            requester,
+        )
+        .await?;
         ctx.reply(format!(
             "Queued **{}** ({})",
             track.title,
@@ -177,7 +183,10 @@ pub async fn volume(
     let guild_id = ctx.guild_id().context("Must be in a guild")?;
     let v = (percent.min(200) as f32) / 100.0;
     let applied = music::set_volume(ctx.data(), guild_id, v).await?;
-    ctx.reply(format!("Volume set to {}%", (applied * 100.0).round() as u32))
-        .await?;
+    ctx.reply(format!(
+        "Volume set to {}%",
+        (applied * 100.0).round() as u32
+    ))
+    .await?;
     Ok(())
 }

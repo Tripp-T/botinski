@@ -5,13 +5,59 @@ on:
     branches:
       - main
 
+concurrency:
+  group: build-push-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: forgejo.trippt.xyz
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  check:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SQLX_OFFLINE: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: https://github.com/cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Cache Nix store
+        uses: https://github.com/nix-community/cache-nix-action@v5
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'Cargo.lock') }}
+          restore-keys: |
+            nix-${{ runner.os }}-
+
+      - name: cargo fmt
+        run: nix develop --command cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: nix develop --command cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: nix develop --command cargo test --all-targets
+
+      - name: Verify .sqlx is in sync with the queries
+        run: |
+          export DATABASE_URL="sqlite:///tmp/sqlx-check.db?mode=rwc"
+          nix develop --command bash -c "
+            sqlx database create &&
+            sqlx migrate run &&
+            cargo sqlx prepare --check -- --all-targets --all-features
+          "
+
+  build-and-push:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       id-token: write
       packages: write
@@ -27,10 +73,10 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: Cache Nix Store
+      - name: Cache Nix store
         uses: https://github.com/nix-community/cache-nix-action@v5
         with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'Cargo.lock') }}
           restore-keys: |
             nix-${{ runner.os }}-
 
@@ -38,24 +84,23 @@ jobs:
         run: nix build .#docker
 
       - name: Load image into Docker
-        run: |
-          echo "Loading Docker image..."
-          docker load -i result
+        run: docker load -i result
 
       - name: Log in to Forgejo Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Tag and push Docker image
         run: |
-          TARGET_IMAGE_ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          TARGET_IMAGE_ID=$(echo $TARGET_IMAGE_ID | tr '[A-Z]' '[a-z]') # Ensure lowercase
-          
+          TARGET_IMAGE=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[A-Z]' '[a-z]')
           SOURCE_IMAGE="botinski:latest"
-          docker tag $SOURCE_IMAGE $TARGET_IMAGE_ID:latest
-          
-          echo "Pushing images..."
-          docker push $TARGET_IMAGE_ID:latest
+
+          docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE:latest"
+          docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE:${{ github.sha }}"
+
+          echo "Pushing $TARGET_IMAGE:latest and $TARGET_IMAGE:${{ github.sha }}"
+          docker push "$TARGET_IMAGE:latest"
+          docker push "$TARGET_IMAGE:${{ github.sha }}"

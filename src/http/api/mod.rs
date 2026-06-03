@@ -107,14 +107,9 @@ async fn oauth_callback(
     {
         Some(existing) => {
             if existing.name != current_user.name || existing.email != current_email {
-                AppUser::update_profile(
-                    &state.db,
-                    existing.id,
-                    &current_user.name,
-                    &current_email,
-                )
-                .await
-                .context("Failed to refresh existing user profile")?;
+                AppUser::update_profile(&state.db, existing.id, &current_user.name, &current_email)
+                    .await
+                    .context("Failed to refresh existing user profile")?;
             }
             existing
         }

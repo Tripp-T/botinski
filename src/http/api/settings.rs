@@ -16,10 +16,7 @@ use poise::serenity_prelude::{GuildId, RoleId};
 use serde::Deserialize;
 
 pub fn settings_router() -> Router<AppState> {
-    Router::new().route(
-        "/guilds/{guild_id}/settings",
-        post(action_update_settings),
-    )
+    Router::new().route("/guilds/{guild_id}/settings", post(action_update_settings))
 }
 
 #[derive(Deserialize)]
@@ -70,5 +67,8 @@ async fn action_update_settings(
         .unwrap_or_default();
     music::apply_settings(&state, guild_id, &new_settings).await?;
 
-    Ok(Redirect::to(&format!("/guilds/{}/settings", guild_id.get())))
+    Ok(Redirect::to(&format!(
+        "/guilds/{}/settings",
+        guild_id.get()
+    )))
 }

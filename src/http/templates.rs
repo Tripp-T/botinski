@@ -28,8 +28,7 @@ impl TemplateBase {
             }
         }
         let nav_link = |title: &str, path: &str, props: NavLinkProps| -> maud::Markup {
-            let is_active = self.path == path
-                || (path != "/" && self.path.starts_with(path));
+            let is_active = self.path == path || (path != "/" && self.path.starts_with(path));
             html! {
                 a
                     hx-boost=(props.hx_boost)

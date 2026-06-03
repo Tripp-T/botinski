@@ -4,8 +4,7 @@ use crate::{
     models::{guild_settings::GuildSettings, user::AppUser, user_role::AppUserRole},
 };
 use axum::{
-    Router,
-    debug_handler,
+    Router, debug_handler,
     extract::{Path, State},
     response::IntoResponse,
     routing::get,

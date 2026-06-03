@@ -208,16 +208,28 @@ pub enum PlaybackStatus {
     None,
 }
 
-pub fn render_state(
-    guild_id: GuildId,
-    is_admin: bool,
-    connected: bool,
-    current: Option<&music::Track>,
-    current_position: Option<Duration>,
-    queue: &[music::Track],
-    volume: f32,
-    status: PlaybackStatus,
-) -> Markup {
+pub struct MusicView<'a> {
+    pub guild_id: GuildId,
+    pub is_admin: bool,
+    pub connected: bool,
+    pub current: Option<&'a music::Track>,
+    pub current_position: Option<Duration>,
+    pub queue: &'a [music::Track],
+    pub volume: f32,
+    pub status: PlaybackStatus,
+}
+
+pub fn render_state(view: MusicView<'_>) -> Markup {
+    let MusicView {
+        guild_id,
+        is_admin,
+        connected,
+        current,
+        current_position,
+        queue,
+        volume,
+        status,
+    } = view;
     let g = guild_id.get();
     let vol_pct = (volume * 100.0).round() as i32;
     html! {
@@ -397,16 +409,16 @@ async fn render_state_for(
             (None, None, Vec::new(), vol, PlaybackStatus::None)
         }
     };
-    Ok(Html(render_state(
+    Ok(Html(render_state(MusicView {
         guild_id,
         is_admin,
         connected,
-        current.as_ref(),
+        current: current.as_ref(),
         current_position,
-        &queue,
+        queue: &queue,
         volume,
         status,
-    )))
+    })))
 }
 
 #[debug_handler]

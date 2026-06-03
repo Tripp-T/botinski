@@ -40,10 +40,7 @@ fn encode_admin_role_ids(ids: &[RoleId]) -> String {
 }
 
 impl GuildSettings {
-    pub async fn get(
-        pool: &SqlitePool,
-        guild_id: GuildId,
-    ) -> Result<Option<Self>, sqlx::Error> {
+    pub async fn get(pool: &SqlitePool, guild_id: GuildId) -> Result<Option<Self>, sqlx::Error> {
         let key = guild_id.get().to_string();
         let row = sqlx::query!(
             "SELECT volume, max_volume, idle_leave_secs, admin_role_ids FROM guild_settings WHERE guild_id = ?",

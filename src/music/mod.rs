@@ -15,6 +15,7 @@ use songbird::{
     },
     tracks::TrackHandle,
 };
+use std::collections::HashSet;
 use std::{
     pin::Pin,
     process::Stdio,
@@ -23,7 +24,6 @@ use std::{
 use symphonia::core::io::MediaSource;
 use tokio::io::{AsyncRead, ReadBuf};
 use tokio::process::{Child, ChildStdout};
-use std::collections::HashSet;
 use tokio::sync::{Mutex, broadcast};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
@@ -219,7 +219,11 @@ async fn probe_track(query: &str) -> anyhow::Result<YtdlpInfo> {
     serde_json::from_slice(first).context("Failed to parse yt-dlp output")
 }
 
-fn build_input(client: reqwest::Client, info: &YtdlpInfo, watch_url: &str) -> anyhow::Result<Input> {
+fn build_input(
+    client: reqwest::Client,
+    info: &YtdlpInfo,
+    watch_url: &str,
+) -> anyhow::Result<Input> {
     if info.is_live {
         let manifest_url = info
             .url
@@ -300,9 +304,7 @@ impl Compose for FfmpegInput {
             .map_err(|e| AudioStreamError::Fail(Box::new(e)))?;
 
         let stdout = child.stdout.take().ok_or_else(|| {
-            AudioStreamError::Fail(
-                std::io::Error::new(std::io::ErrorKind::Other, "ffmpeg stdout missing").into(),
-            )
+            AudioStreamError::Fail(std::io::Error::other("ffmpeg stdout missing").into())
         })?;
 
         let wrapped = FfmpegStdout {
@@ -594,10 +596,7 @@ impl VoiceEventHandler for TrackEndHandler {
         if let EventContext::Track(states) = ctx {
             for (state, _) in *states {
                 if let songbird::tracks::PlayMode::Errored(err) = &state.playing {
-                    error!(
-                        "Track in guild {} ended with error: {err:?}",
-                        self.guild_id
-                    );
+                    error!("Track in guild {} ended with error: {err:?}", self.guild_id);
                 }
             }
         }
