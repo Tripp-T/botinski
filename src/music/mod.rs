@@ -31,9 +31,8 @@ use uuid::Uuid;
 use crate::{AppState, AppStateInner, models::guild_settings::GuildSettings};
 
 pub const DEFAULT_VOLUME: f32 = 1.0;
+/// Hard absolute ceiling for `set_volume`. Per-guild config can lower this further.
 pub const MAX_VOLUME: f32 = 2.0;
-
-const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Debug)]
 pub struct Track {
@@ -97,6 +96,8 @@ pub struct GuildPlayer {
     pub current: Option<NowPlaying>,
     pub idle_since: Option<Instant>,
     pub volume: f32,
+    pub max_volume: f32,
+    pub idle_leave: Duration,
     settings_loaded: bool,
 }
 
@@ -107,6 +108,8 @@ impl Default for GuildPlayer {
             current: None,
             idle_since: None,
             volume: DEFAULT_VOLUME,
+            max_volume: MAX_VOLUME,
+            idle_leave: Duration::from_secs(300),
             settings_loaded: false,
         }
     }
@@ -528,9 +531,34 @@ async fn ensure_settings_loaded(
         .await
         .context("Failed to load persisted guild settings")?
     {
-        guard.volume = settings.volume.clamp(0.0, MAX_VOLUME);
+        guard.max_volume = settings.max_volume.clamp(0.0, MAX_VOLUME);
+        guard.volume = settings.volume.clamp(0.0, guard.max_volume);
+        guard.idle_leave = Duration::from_secs(settings.idle_leave_secs.max(0) as u64);
     }
     guard.settings_loaded = true;
+    Ok(())
+}
+
+pub async fn apply_settings(
+    state: &Arc<AppStateInner>,
+    guild_id: GuildId,
+    new_settings: &GuildSettings,
+) -> anyhow::Result<()> {
+    let player = state.music.player(guild_id);
+    let mut guard = player.lock().await;
+    guard.max_volume = new_settings.max_volume.clamp(0.0, MAX_VOLUME);
+    guard.idle_leave = Duration::from_secs(new_settings.idle_leave_secs.max(0) as u64);
+    // re-clamp volume to the (possibly lowered) cap and apply
+    let clamped = guard.volume.min(guard.max_volume);
+    if clamped != guard.volume {
+        guard.volume = clamped;
+        if let Some(np) = &guard.current {
+            let _ = np.handle.set_volume(clamped);
+        }
+    }
+    guard.settings_loaded = true;
+    drop(guard);
+    state.music.notify(guild_id);
     Ok(())
 }
 
@@ -539,11 +567,11 @@ pub async fn set_volume(
     guild_id: GuildId,
     volume: f32,
 ) -> anyhow::Result<f32> {
-    let volume = volume.clamp(0.0, MAX_VOLUME);
+    ensure_settings_loaded(state, guild_id).await?;
     let player = state.music.player(guild_id);
     let mut guard = player.lock().await;
+    let volume = volume.clamp(0.0, guard.max_volume);
     guard.volume = volume;
-    guard.settings_loaded = true;
     if let Some(np) = &guard.current {
         let _ = np.handle.set_volume(volume);
     }
@@ -759,9 +787,11 @@ pub async fn idle_reaper(state: AppState) -> anyhow::Result<()> {
                     let Some(player) = state.music.try_get_player(guild_id) else { continue };
                     let should_leave = {
                         let guard = player.lock().await;
-                        guard.current.is_none()
+                        let timeout = guard.idle_leave;
+                        timeout > Duration::ZERO
+                            && guard.current.is_none()
                             && guard.queue.is_empty()
-                            && guard.idle_since.is_some_and(|t| t.elapsed() >= IDLE_TIMEOUT)
+                            && guard.idle_since.is_some_and(|t| t.elapsed() >= timeout)
                     };
                     if should_leave {
                         debug!("Idle reaper: disconnecting from guild {guild_id}");

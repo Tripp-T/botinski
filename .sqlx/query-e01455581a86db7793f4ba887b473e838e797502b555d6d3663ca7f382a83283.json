@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO guild_settings (guild_id, idle_leave_secs) VALUES (?, ?) ON CONFLICT(guild_id) DO UPDATE SET idle_leave_secs = excluded.idle_leave_secs",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "e01455581a86db7793f4ba887b473e838e797502b555d6d3663ca7f382a83283"
+}

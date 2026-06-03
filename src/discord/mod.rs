@@ -147,7 +147,8 @@ async fn event_handler(
 }
 
 async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
-    let config = &ctx.data().config.read().await.discord;
+    let data = ctx.data();
+    let config = &data.config.read().await.discord;
 
     let author = ctx.author();
 
@@ -156,20 +157,33 @@ async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
         .as_ref()
         .is_some_and(|a| a.contains(&author.id))
     {
-        // is listed in the admin user ids
         return Ok(true);
     }
 
-    if let Some(admin_role_ids) = config.admin_roles.as_ref() {
-        let is_admin_role_member = ctx
-            .author_member()
+    let member_role_ids: Vec<RoleId> = match ctx.author_member().await {
+        Some(m) => m.roles.to_vec(),
+        None => Vec::new(),
+    };
+
+    if let Some(admin_role_ids) = config.admin_roles.as_ref()
+        && member_role_ids.iter().any(|r| admin_role_ids.contains(r))
+    {
+        return Ok(true);
+    }
+
+    if let Some(guild_id) = ctx.guild_id() {
+        let settings = crate::models::guild_settings::GuildSettings::get(&data.db, guild_id)
             .await
-            .map(|m| m.roles.iter().any(|rid| admin_role_ids.contains(rid)))
-            .unwrap_or(false);
-        if is_admin_role_member {
+            .context("Failed to load guild settings for admin check")?
+            .unwrap_or_default();
+        if !settings.admin_role_ids.is_empty()
+            && member_role_ids
+                .iter()
+                .any(|r| settings.admin_role_ids.contains(r))
+        {
             return Ok(true);
         }
-    };
+    }
 
     ctx.reply("Permission denied")
         .await

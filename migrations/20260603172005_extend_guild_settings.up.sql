@@ -1,0 +1,2 @@
+ALTER TABLE guild_settings ADD COLUMN max_volume REAL NOT NULL DEFAULT 2.0;
+ALTER TABLE guild_settings ADD COLUMN idle_leave_secs INTEGER NOT NULL DEFAULT 300;

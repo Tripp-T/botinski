@@ -2,7 +2,11 @@ use axum::{RequestPartsExt, extract::FromRequestParts};
 use poise::serenity_prelude::{Cache, GuildId, Member, Permissions, RoleId};
 use tracing::warn;
 
-use crate::{AppState, http::HttpError, models::user::AppUser};
+use crate::{
+    AppState,
+    http::HttpError,
+    models::{guild_settings::GuildSettings, user::AppUser},
+};
 
 #[derive(Clone, Default)]
 pub enum AppUserRole {
@@ -95,7 +99,18 @@ impl FromRequestParts<AppState> for AppUserRole {
                 }
             };
             member_of.push(guild_id);
-            if member_is_admin(&http_cache.cache, guild_id, &member, &admin_roles) {
+
+            // Merge global config admin_roles with per-guild persisted admin_role_ids.
+            let per_guild_admin = GuildSettings::get(&state.db, guild_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|s| s.admin_role_ids)
+                .unwrap_or_default();
+            let mut combined_admin_roles: Vec<RoleId> = admin_roles.clone();
+            combined_admin_roles.extend(per_guild_admin);
+
+            if member_is_admin(&http_cache.cache, guild_id, &member, &combined_admin_roles) {
                 admin_of.push(guild_id);
             }
         }

@@ -9,12 +9,17 @@ pub fn component_card(
     error: bool,
 ) -> maud::Markup {
     html! {
-        div class="flex flex-col text-center m-auto w-full max-w-xl border border-gray-500 rounded-md p-4" {
-            div."text-xl"."border-b"."font-bold"."pb-2"."text-red-500"[error] {
-                (title)
-            }
-            p class="pt-4" {
-                (body)
+        div class="max-w-3xl mx-auto p-4" {
+            div class="rounded-lg bg-gray-900/60 border border-gray-800 p-6 space-y-3" {
+                div class={
+                    "text-lg font-semibold "
+                    @if error { "text-red-400" } @else { "text-gray-50" }
+                } {
+                    (title)
+                }
+                div class="text-sm text-gray-400 leading-relaxed" {
+                    (body)
+                }
             }
         }
     }

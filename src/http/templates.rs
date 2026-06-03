@@ -28,13 +28,14 @@ impl TemplateBase {
             }
         }
         let nav_link = |title: &str, path: &str, props: NavLinkProps| -> maud::Markup {
-            let is_active = self.path == path;
+            let is_active = self.path == path
+                || (path != "/" && self.path.starts_with(path));
             html! {
                 a
                     hx-boost=(props.hx_boost)
                     href=(path)
                     data-active?[is_active]
-                    class="border-b border-gray-500 data-[active=true]:border-gray-300"
+                    class="px-2 py-1 rounded-md text-sm text-gray-400 hover:text-gray-100 hover:bg-gray-800/60 data-[active=true]:text-gray-100 data-[active=true]:bg-gray-800/80 transition-colors"
                 {(title)}
             }
         };
@@ -51,10 +52,11 @@ impl TemplateBase {
                     script src="/htmx-ext-sse.2.2.2.js" {}
                     link href="/output.css" rel="stylesheet" {}
                 }
-                body class="dark:bg-gray-950 dark:text-white bg-gray-100" {
-                    nav class="w-full py-1 flex border-b border-gray-500" {
-                        div class="px-2 w-full max-w-3xl mx-auto flex flex-row" hx-boost="true" {
-                            div class="flex flex-row space-x-2" {
+                body class="min-h-screen bg-gray-950 text-gray-100 antialiased" {
+                    nav class="sticky top-0 z-20 bg-gray-950/80 backdrop-blur border-b border-gray-800" {
+                        div class="px-4 py-2.5 max-w-3xl mx-auto flex items-center" hx-boost="true" {
+                            div class="flex items-center gap-1" {
+                                a href="/" class="mr-2 font-semibold text-gray-100 tracking-tight" { "botinski" }
                                 (nav_link("Home", "/", NavLinkProps::default()))
                                 @if self.user.is_some() {
                                     (nav_link("Guilds", "/guilds", NavLinkProps::default()))
@@ -71,7 +73,7 @@ impl TemplateBase {
                             }
                         }
                     }
-                    div id="content" class="p-2" {
+                    div id="content" {
                         (body)
                     }
                 }

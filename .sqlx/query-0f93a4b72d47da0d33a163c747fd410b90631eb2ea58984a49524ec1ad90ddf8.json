@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO guild_settings (guild_id, admin_role_ids) VALUES (?, ?) ON CONFLICT(guild_id) DO UPDATE SET admin_role_ids = excluded.admin_role_ids",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "0f93a4b72d47da0d33a163c747fd410b90631eb2ea58984a49524ec1ad90ddf8"
+}

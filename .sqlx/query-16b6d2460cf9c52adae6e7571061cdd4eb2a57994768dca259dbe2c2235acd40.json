@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO guild_settings (guild_id, max_volume) VALUES (?, ?) ON CONFLICT(guild_id) DO UPDATE SET max_volume = excluded.max_volume",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "16b6d2460cf9c52adae6e7571061cdd4eb2a57994768dca259dbe2c2235acd40"
+}
