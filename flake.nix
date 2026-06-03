@@ -29,6 +29,7 @@
                     extensions = [
                       "rust-src"
                       "rustfmt"
+                      "clippy"
                     ];
                   };
                 })
@@ -37,14 +38,17 @@
           }
         );
       cargoFile = builtins.fromTOML (builtins.readFile ./Cargo.toml);
-    in
-    {
-      packages = forEachSupportedSystem (
-        { pkgs }:
+
+      # Per-system project setup. Calls to this are cheap to repeat across
+      # outputs: derivations are content-addressed so Nix dedupes the actual
+      # builds (cargoArtifacts is built once and reused by every check + package).
+      mkProject =
+        pkgs:
         let
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain pkgs.rust-toolchain;
           httpFilter = path: _type: builtins.match ".*(public|input.css)(/.*)?$" path != null;
-          sqlxAndMigrationsFilter = path: _type: builtins.match ".*(\\.sqlx|migrations)(/.*)?$" path != null;
+          sqlxAndMigrationsFilter =
+            path: _type: builtins.match ".*(\\.sqlx|migrations)(/.*)?$" path != null;
           srcFilter =
             path: type:
             (sqlxAndMigrationsFilter path type)
@@ -72,17 +76,26 @@
             SQLX_OFFLINE = "true";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-          rustApp = craneLib.buildPackage (
-            commonArgs
+        in
+        {
+          inherit craneLib src commonArgs cargoArtifacts;
+        };
+    in
+    {
+      packages = forEachSupportedSystem (
+        { pkgs }:
+        let
+          p = mkProject pkgs;
+          rustApp = p.craneLib.buildPackage (
+            p.commonArgs
             // {
-              inherit cargoArtifacts;
+              inherit (p) cargoArtifacts;
               postInstall = ''
                 mkdir -p $out/share/site
                 cp -R target/dist/. $out/share/site/
               '';
             }
           );
-
           dockerImage = pkgs.dockerTools.buildLayeredImage {
             name = cargoFile.package.name;
             tag = "latest";
@@ -108,6 +121,32 @@
           docker = dockerImage;
         }
       );
+
+      checks = forEachSupportedSystem (
+        { pkgs }:
+        let
+          p = mkProject pkgs;
+        in
+        {
+          fmt = p.craneLib.cargoFmt {
+            inherit (p) src;
+          };
+          clippy = p.craneLib.cargoClippy (
+            p.commonArgs
+            // {
+              inherit (p) cargoArtifacts;
+              cargoClippyExtraArgs = "--all-targets -- -D warnings";
+            }
+          );
+          test = p.craneLib.cargoTest (
+            p.commonArgs
+            // {
+              inherit (p) cargoArtifacts;
+            }
+          );
+        }
+      );
+
       devShells = forEachSupportedSystem (
         { pkgs }:
         {

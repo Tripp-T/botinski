@@ -38,14 +38,8 @@ jobs:
           restore-keys: |
             nix-${{ runner.os }}-
 
-      - name: cargo fmt
-        run: nix develop --command cargo fmt --all -- --check
-
-      - name: cargo clippy
-        run: nix develop --command cargo clippy --all-targets -- -D warnings
-
-      - name: cargo test
-        run: nix develop --command cargo test --all-targets
+      - name: nix flake check (fmt + clippy + test)
+        run: nix flake check
 
       - name: Verify .sqlx is in sync with the queries
         run: |
