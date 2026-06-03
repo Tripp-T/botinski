@@ -33,6 +33,7 @@ impl ConfigManager {
         self.data.read().await
     }
     /// Returns a RwLockWriteGuard of [ConfigData]
+    #[allow(dead_code)]
     pub async fn write(&self) -> tokio::sync::RwLockWriteGuard<'_, ConfigData> {
         self.data.write().await
     }

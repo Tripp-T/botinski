@@ -80,16 +80,19 @@ impl AppSession {
         .fetch_optional(pool)
         .await
     }
-    pub async fn delete_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<()>, sqlx::Error> {
-        sqlx::query!(
-            r#"
-            DELETE FROM sessions WHERE id = ?
-            "#,
-            id
-        )
-        .fetch_optional(pool)
-        .await
-        .map(|o| o.map(|_| ()))
+    pub async fn delete_by_id(pool: &SqlitePool, id: Uuid) -> Result<(), sqlx::Error> {
+        sqlx::query!("DELETE FROM sessions WHERE id = ?", id)
+            .execute(pool)
+            .await
+            .map(|_| ())
+    }
+    /// Removes all sessions whose `expires_at` is in the past. Returns count reaped.
+    pub async fn delete_expired(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
+        let now = Utc::now();
+        sqlx::query!("DELETE FROM sessions WHERE expires_at < ?", now)
+            .execute(pool)
+            .await
+            .map(|r| r.rows_affected())
     }
 }
 impl FromRequestParts<AppState> for AppSession {

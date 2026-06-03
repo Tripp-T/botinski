@@ -86,6 +86,8 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
 pub enum HttpError {
     #[error("Unauthorized")]
     Unauthorized,
+    #[error("Forbidden")]
+    Forbidden,
     #[error("Not Found")]
     NotFound,
     #[error("Internal Error: {0}")]
@@ -102,6 +104,7 @@ impl HttpError {
     fn as_status(&self) -> StatusCode {
         match self {
             HttpError::Unauthorized => StatusCode::UNAUTHORIZED,
+            HttpError::Forbidden => StatusCode::FORBIDDEN,
             HttpError::NotFound => StatusCode::NOT_FOUND,
             HttpError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             HttpError::BadRequest(_) => StatusCode::BAD_REQUEST,
@@ -113,6 +116,7 @@ impl HttpError {
     fn description(&self) -> String {
         match self {
             Self::Unauthorized => "Unauthorized to access the requested resource",
+            Self::Forbidden => "You don't have permission to access the requested resource",
             Self::NotFound => "The requested resource was not found",
             Self::Internal(_) => {
                 "An internal error occurred while attempting to facilitate your request"

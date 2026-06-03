@@ -17,8 +17,8 @@ type Error = anyhow::Error;
 type Context<'a> = poise::Context<'a, AppState, Error>;
 
 pub struct DiscordHttpCache {
-    http: Arc<poise::serenity_prelude::Http>,
-    cache: Arc<poise::serenity_prelude::Cache>,
+    pub http: Arc<poise::serenity_prelude::Http>,
+    pub cache: Arc<poise::serenity_prelude::Cache>,
 }
 impl CacheHttp for DiscordHttpCache {
     fn cache(&self) -> Option<&Arc<Cache>> {

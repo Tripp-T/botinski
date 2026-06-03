@@ -1,4 +1,7 @@
-use crate::{config::ConfigManager, db::DBManager, discord::DiscordHttpCache, oauth::OauthManager};
+use crate::{
+    config::ConfigManager, db::DBManager, discord::DiscordHttpCache, models::session::AppSession,
+    oauth::OauthManager,
+};
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -121,6 +124,7 @@ async fn main() -> anyhow::Result<()> {
         discord::main(state.clone(), opts.clone()),
         "Discord",
     );
+    wrap_thread(&mut thread_pool, session_gc(state.clone()), "SessionGC");
 
     let mut threads_with_error = 0usize;
     while let Some(thread_result) = thread_pool.join_next().await {
@@ -162,6 +166,23 @@ where
 {
     let name = name.into();
     thread_pool.spawn(async { (name, thread.await) })
+}
+
+async fn session_gc(state: AppState) -> Result<()> {
+    use tokio::time;
+    let mut interval = time::interval(time::Duration::from_secs(3600));
+    loop {
+        tokio::select! {
+            _ = state.shutdown_token.cancelled() => return Ok(()),
+            _ = interval.tick() => {
+                match AppSession::delete_expired(&state.db).await {
+                    Ok(0) => debug!("Session GC: no expired sessions to reap"),
+                    Ok(n) => info!("Session GC: reaped {n} expired session(s)"),
+                    Err(e) => error!("Session GC failed: {e}"),
+                }
+            }
+        }
+    }
 }
 
 async fn shutdown_signal(state: AppState) -> Result<()> {

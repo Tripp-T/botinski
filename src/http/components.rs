@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use maud::html;
 
 /// Returns a html component

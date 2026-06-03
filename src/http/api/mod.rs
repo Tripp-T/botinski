@@ -82,6 +82,7 @@ async fn oauth_callback(
     if csrf.value() != query.state {
         return Err(HttpError::BadRequest("Expired CSRF token".into()));
     }
+    cookies.remove(csrf.into_owned());
 
     let token = state.oauth.exchange_code(&query.code).await?;
     let discord_client =
@@ -91,19 +92,32 @@ async fn oauth_callback(
         .await
         .context("Failed to fetch current discord user")?;
 
+    let current_email = current_user
+        .email
+        .clone()
+        .context("Missing discord user email")?;
     let db_user = match AppUser::get_by_discord_id(&state.db, current_user.id)
         .await
         .context("Failed to query DB for existing user")?
     {
-        Some(user) => user,
+        Some(existing) => {
+            if existing.name != current_user.name || existing.email != current_email {
+                AppUser::update_profile(
+                    &state.db,
+                    existing.id,
+                    &current_user.name,
+                    &current_email,
+                )
+                .await
+                .context("Failed to refresh existing user profile")?;
+            }
+            existing
+        }
         None => AppUser::new(
             &state.db,
             current_user.id,
             current_user.name.clone(),
-            current_user
-                .email
-                .clone()
-                .context("Missing discord user email")?,
+            current_email,
         )
         .await
         .context("Failed to create new user")?,

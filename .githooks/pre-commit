@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 echo "--- Running cargo sqlx prepare ---"
 if cargo sqlx prepare -- --all-targets --all-features; then

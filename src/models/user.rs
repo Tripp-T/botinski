@@ -53,6 +53,22 @@ impl AppUser {
         .fetch_optional(pool)
         .await
     }
+    pub async fn update_profile(
+        pool: &SqlitePool,
+        id: Uuid,
+        name: &str,
+        email: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            "UPDATE users SET name = ?, email = ? WHERE id = ?",
+            name,
+            email,
+            id
+        )
+        .execute(pool)
+        .await
+        .map(|_| ())
+    }
     pub async fn get_by_discord_id(
         pool: &SqlitePool,
         discord_id: poise::serenity_prelude::all::UserId,
