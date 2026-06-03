@@ -75,10 +75,28 @@
             ];
             SQLX_OFFLINE = "true";
           };
+          # Debug-profile deps, shared by the check derivations (fmt is the
+          # exception — it doesn't need cargoArtifacts).
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          # Release-profile deps, shared by the binary + docker image. Without
+          # this, buildPackage (which is --release) recompiles every dep from
+          # scratch on every docker build because the debug cargoArtifacts is
+          # not reusable across profiles.
+          cargoArtifactsRelease = craneLib.buildDepsOnly (
+            commonArgs
+            // {
+              CARGO_PROFILE = "release";
+            }
+          );
         in
         {
-          inherit craneLib src commonArgs cargoArtifacts;
+          inherit
+            craneLib
+            src
+            commonArgs
+            cargoArtifacts
+            cargoArtifactsRelease
+            ;
         };
     in
     {
@@ -89,7 +107,7 @@
           rustApp = p.craneLib.buildPackage (
             p.commonArgs
             // {
-              inherit (p) cargoArtifacts;
+              cargoArtifacts = p.cargoArtifactsRelease;
               postInstall = ''
                 mkdir -p $out/share/site
                 cp -R target/dist/. $out/share/site/
