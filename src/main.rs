@@ -1,6 +1,6 @@
 use crate::{
     config::ConfigManager, db::DBManager, discord::DiscordHttpCache, models::session::AppSession,
-    oauth::OauthManager,
+    music::MusicManager, oauth::OauthManager,
 };
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -20,6 +20,7 @@ mod db;
 mod discord;
 mod http;
 mod models;
+mod music;
 mod oauth;
 mod utils;
 
@@ -74,6 +75,7 @@ struct AppStateInner {
     config: ConfigManager,
     db: DBManager,
     oauth: OauthManager,
+    music: MusicManager,
     discord_http: OnceCell<DiscordHttpCache>,
     shutdown_token: CancellationToken,
 }
@@ -83,6 +85,7 @@ impl AppStateInner {
             config: ConfigManager::new(opts)?,
             db: DBManager::new(opts).await?,
             oauth: OauthManager::new(opts)?,
+            music: MusicManager::new(),
             discord_http: OnceCell::new(),
             shutdown_token: CancellationToken::new(),
         })
@@ -125,6 +128,11 @@ async fn main() -> anyhow::Result<()> {
         "Discord",
     );
     wrap_thread(&mut thread_pool, session_gc(state.clone()), "SessionGC");
+    wrap_thread(
+        &mut thread_pool,
+        music::idle_reaper(state.clone()),
+        "MusicIdleReaper",
+    );
 
     let mut threads_with_error = 0usize;
     while let Some(thread_result) = thread_pool.join_next().await {

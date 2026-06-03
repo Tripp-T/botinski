@@ -1,10 +1,12 @@
 use crate::{AppState, Opts};
 use anyhow::{Context as AnyhowContext, Result, anyhow};
 use poise::{PrefixFrameworkOptions, serenity_prelude::*};
+use songbird::serenity::SerenityInit;
 use std::sync::{Arc, LazyLock};
 use tracing::{debug, info};
 
 mod commands;
+mod music_commands;
 
 static INTENTS: LazyLock<GatewayIntents> = LazyLock::new(|| {
     GatewayIntents::GUILD_MESSAGES
@@ -50,7 +52,23 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
             },
             commands: {
                 use commands::*;
-                vec![age(), ping(), shutdown(), roll(), coin_flip()]
+                use music_commands::*;
+                vec![
+                    age(),
+                    ping(),
+                    shutdown(),
+                    roll(),
+                    coin_flip(),
+                    play(),
+                    skip(),
+                    queue(),
+                    pause(),
+                    resume(),
+                    clear(),
+                    leave(),
+                    nowplaying(),
+                    volume(),
+                ]
             },
             event_handler: |ctx, event, framework, data| {
                 Box::pin(event_handler(ctx, event, framework, data))
@@ -84,6 +102,7 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
 
     let mut client = Client::builder(&discord_token, *INTENTS)
         .framework(framework)
+        .register_songbird_with(state.music.songbird())
         .await
         .context("Failed to create discord client")?;
 

@@ -48,6 +48,7 @@ impl TemplateBase {
                         @if let Some(title) = &self.title { (title) " | botinski" } @else { "botinski" }
                     }
                     script src="/htmx.2.0.8.min.js" {}
+                    script src="/htmx-ext-sse.2.2.2.js" {}
                     link href="/output.css" rel="stylesheet" {}
                 }
                 body class="dark:bg-gray-950 dark:text-white bg-gray-100" {

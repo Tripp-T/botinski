@@ -33,6 +33,9 @@ impl AppUserRole {
             _ => false,
         }
     }
+    pub fn is_member_of(&self, guild_id: GuildId) -> bool {
+        matches!(self, Self::GlobalAdmin) || self.mutual_guilds().contains(&guild_id)
+    }
     pub fn mutual_guilds(&self) -> &[GuildId] {
         match self {
             Self::Member { guilds } => guilds,

@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 
 echo "--- Running cargo sqlx prepare ---"
-if cargo sqlx prepare -- --all-targets --all-features; then
+
+# Native deps (libopus, cmake) live in the nix dev shell, so route through
+# `nix develop` if available so the hook works from a plain shell too.
+if command -v nix >/dev/null 2>&1 && [ -f flake.nix ]; then
+    PREPARE_CMD=(nix develop --command cargo sqlx prepare -- --all-targets --all-features)
+else
+    PREPARE_CMD=(cargo sqlx prepare -- --all-targets --all-features)
+fi
+
+if "${PREPARE_CMD[@]}"; then
     git add .sqlx
     echo "--- SQLx cache completed and staged if modified ---"
 else

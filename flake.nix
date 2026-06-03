@@ -63,8 +63,12 @@
             nativeBuildInputs = with pkgs; [
               pkg-config
               tailwindcss_4
+              cmake
             ];
-            buildInputs = [ pkgs.openssl ];
+            buildInputs = with pkgs; [
+              openssl
+              libopus
+            ];
             SQLX_OFFLINE = "true";
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -83,9 +87,11 @@
             name = cargoFile.package.name;
             tag = "latest";
 
-            contents = [
+            contents = with pkgs; [
               rustApp
-              pkgs.cacert
+              cacert
+              ffmpeg
+              yt-dlp
             ];
 
             config = {
@@ -113,9 +119,13 @@
               just
               sqlx-cli
               tailwindcss_4
+              cmake
+              ffmpeg
+              yt-dlp
             ];
             buildInputs = with pkgs; [
               openssl
+              libopus
             ];
             env = {
               RUST_LOG = "${cargoFile.package.name}=debug";

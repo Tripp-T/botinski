@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS guild_settings (
+  guild_id TEXT PRIMARY KEY NOT NULL,
+  volume REAL NOT NULL DEFAULT 1.0
+);

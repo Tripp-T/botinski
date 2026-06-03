@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT volume FROM guild_settings WHERE guild_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "volume",
+        "ordinal": 0,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "95f2b7afe5bb96051d2e716c14464fd99e8c91088e3161b33d325062d5afa521"
+}

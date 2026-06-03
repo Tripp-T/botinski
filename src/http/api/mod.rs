@@ -8,6 +8,8 @@ use crate::{
         user::AppUser,
     },
 };
+
+mod music;
 use anyhow::Context;
 use axum::{
     Extension, Router, debug_handler,
@@ -28,6 +30,7 @@ pub fn api_router(_state: &AppState) -> Router<AppState> {
         .route("/oauth/login", get(oauth_login))
         .route("/oauth/logout", get(oauth_logout))
         .route("/oauth/callback", get(oauth_callback))
+        .merge(music::music_router())
 }
 
 async fn healthcheck(

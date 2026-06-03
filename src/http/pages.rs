@@ -28,6 +28,7 @@ pub fn pages_router(_state: &AppState) -> Router<AppState> {
         .route("/profile", get(page_profile))
         .route("/guilds", get(page_guilds))
         .route("/guilds/{guild_id}", get(page_guild_admin))
+        .route("/guilds/{guild_id}/music", get(page_guild_music))
 }
 
 #[debug_handler]
@@ -104,11 +105,17 @@ async fn page_guilds(
                     @for (gid, name, is_admin) in &guilds_info {
                         li class="border border-gray-500 rounded-md p-2 flex items-center justify-between" {
                             span { (name) }
-                            @if *is_admin {
+                            div class="flex gap-3" {
                                 a hx-boost="true"
-                                    href={"/guilds/" (gid.get())}
+                                    href={"/guilds/" (gid.get()) "/music"}
                                     class="text-blue-400 underline"
-                                    { "Manage" }
+                                    { "Music" }
+                                @if *is_admin {
+                                    a hx-boost="true"
+                                        href={"/guilds/" (gid.get())}
+                                        class="text-blue-400 underline"
+                                        { "Manage" }
+                                }
                             }
                         }
                     }
@@ -147,7 +154,128 @@ async fn page_guild_admin(
         div class="flex flex-col max-w-xl mx-auto space-y-2" {
             h1 class="text-xl font-bold" { "Manage: " (name) }
             p { "Member count: " (member_count) }
-            p class="text-gray-400 italic" { "Admin actions coming soon." }
+            ul class="space-y-1 list-disc list-inside" {
+                li {
+                    a hx-boost="true"
+                        href={"/guilds/" (guild_id.get()) "/music"}
+                        class="text-blue-400 underline"
+                        { "Music" }
+                }
+            }
         }
     }))
 }
+
+#[debug_handler]
+async fn page_guild_music(
+    State(state): State<AppState>,
+    tmpl: TemplateBase,
+    role: AppUserRole,
+    Path(guild_id): Path<u64>,
+) -> Result<impl IntoResponse, HttpError> {
+    let guild_id = GuildId::new(guild_id);
+    if !role.is_authenticated() {
+        return Err(HttpError::Unauthorized);
+    }
+    if !role.is_member_of(guild_id) {
+        return Err(HttpError::Forbidden);
+    }
+
+    let http_cache = state.discord_http()?;
+    let name = http_cache
+        .cache
+        .guild(guild_id)
+        .map(|g| g.name.clone())
+        .ok_or(HttpError::NotFound)?;
+
+    Ok(tmpl.set_title(format!("{name} — Music")).render(html! {
+        div class="flex flex-col max-w-3xl mx-auto p-4 space-y-4" {
+            div class="flex items-baseline justify-between" {
+                h1 class="text-2xl font-bold tracking-tight" { (name) }
+                a hx-boost="true" href="/guilds" class="text-xs text-gray-500 hover:text-gray-300 transition-colors" { "← All guilds" }
+            }
+
+            form
+                method="post"
+                action={"/api/guilds/" (guild_id.get()) "/music/play"}
+                hx-post={"/api/guilds/" (guild_id.get()) "/music/play"}
+                hx-target="#music-state"
+                hx-swap="innerHTML"
+                hx-on--after-request="this.reset()"
+                class="flex gap-2 rounded-lg bg-gray-900/40 border border-gray-800 p-2" {
+                input type="text"
+                    name="query"
+                    required
+                    placeholder="URL, search query, or YouTube/YT Music playlist URL"
+                    class="flex-1 px-3 py-1.5 bg-gray-950/60 border border-gray-700 rounded-md text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500 transition-colors";
+                button type="submit"
+                    class="px-4 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors cursor-pointer"
+                    { "Add" }
+            }
+
+            div
+                hx-ext="sse"
+                sse-connect={"/api/guilds/" (guild_id.get()) "/music/events"} {
+                div
+                    id="music-state"
+                    sse-swap="state"
+                { div class="text-sm text-gray-500 italic p-4" { "Connecting…" } }
+            }
+        }
+        script { (maud::PreEscaped(MUSIC_PAGE_SCRIPT)) }
+    }))
+}
+
+const MUSIC_PAGE_SCRIPT: &str = r#"
+(() => {
+  const selected = new Set();
+
+  function updateBulkUI() {
+    const count = selected.size;
+    document.querySelectorAll('.selected-count').forEach(el => el.textContent = count);
+    document.querySelectorAll('.bulk-action').forEach(btn => btn.disabled = count === 0);
+  }
+
+  function reapplySelection() {
+    const present = new Set();
+    document.querySelectorAll('.track-checkbox').forEach(cb => {
+      const id = cb.dataset.trackId;
+      present.add(id);
+      cb.checked = selected.has(id);
+    });
+    for (const id of [...selected]) if (!present.has(id)) selected.delete(id);
+    updateBulkUI();
+  }
+
+  document.addEventListener('change', e => {
+    const cb = e.target.closest('.track-checkbox');
+    if (!cb) return;
+    const id = cb.dataset.trackId;
+    if (cb.checked) selected.add(id); else selected.delete(id);
+    updateBulkUI();
+  });
+
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-bulk-select-all]')) {
+      document.querySelectorAll('.track-checkbox').forEach(cb => {
+        cb.checked = true;
+        selected.add(cb.dataset.trackId);
+      });
+      updateBulkUI();
+    } else if (e.target.closest('[data-bulk-deselect-all]')) {
+      selected.clear();
+      document.querySelectorAll('.track-checkbox').forEach(cb => cb.checked = false);
+      updateBulkUI();
+    }
+  });
+
+  document.body.addEventListener('htmx:configRequest', e => {
+    const trig = e.detail.elt;
+    if (trig && trig.classList && trig.classList.contains('bulk-action')) {
+      e.detail.parameters['ids'] = [...selected].join(',');
+    }
+  });
+
+  document.body.addEventListener('htmx:afterSwap', reapplySelection);
+})();
+"#;
