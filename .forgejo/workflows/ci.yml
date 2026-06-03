@@ -30,9 +30,9 @@ jobs:
       - name: Cache Nix store
         uses: https://github.com/nix-community/cache-nix-action@v5
         with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'Cargo.lock') }}
+          primary-key: nix-check-${{ runner.os }}-${{ hashFiles('flake.lock', 'Cargo.lock') }}
           restore-keys: |
-            nix-${{ runner.os }}-
+            nix-check-${{ runner.os }}-
 
       - name: nix flake check (fmt + clippy + test + sqlx-prepare)
         run: nix flake check
@@ -60,9 +60,9 @@ jobs:
       - name: Cache Nix store
         uses: https://github.com/nix-community/cache-nix-action@v5
         with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'Cargo.lock') }}
+          primary-key: nix-build-${{ runner.os }}-${{ hashFiles('flake.lock', 'Cargo.lock') }}
           restore-keys: |
-            nix-${{ runner.os }}-
+            nix-build-${{ runner.os }}-
 
       - name: Build Docker image via Nix Flake
         run: nix build .#docker
