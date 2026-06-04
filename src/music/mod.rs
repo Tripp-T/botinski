@@ -1,223 +1,47 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::{Arc, RwLock},
-    time::{Duration, Instant},
-};
+//! Music subsystem. Layout:
+//!
+//! - `track`:   data model + format helpers + volume constants.
+//! - `player`:  per-guild queue + currently-playing handle.
+//! - `manager`: process-wide coordinator (songbird, per-guild player map,
+//!   SSE notify channel, shared HTTP client).
+//! - `probe`:   yt-dlp shell-outs (track probe + playlist enumerate).
+//! - `ffmpeg`:  custom songbird `Compose` input that transmuxes any URL via
+//!   ffmpeg into matroska+opus for live streams.
+//!
+//! This file holds the action API (`enqueue`, `skip`, `set_volume`, …) used
+//! by the slash commands and HTTP layer, plus the internal coordination glue
+//! (`start_playback`, `advance_queue`, `TrackEndHandler`, `ensure_settings_loaded`,
+//! `idle_reaper`).
+
+mod ffmpeg;
+mod manager;
+mod player;
+mod probe;
+mod track;
+
+pub use ffmpeg::FfmpegInput;
+pub use manager::MusicManager;
+pub use player::{GuildPlayer, NowPlaying};
+pub use probe::is_playlist_url;
+pub use track::{DEFAULT_VOLUME, MAX_VOLUME, Track, format_duration, format_secs};
 
 use anyhow::{Context as _, anyhow, bail};
 use poise::serenity_prelude::{ChannelId, GuildId, UserId};
-use serde::Deserialize;
 use songbird::{
-    Event, EventContext, EventHandler as VoiceEventHandler, Songbird, TrackEvent,
-    input::{
-        AsyncAdapterStream, AsyncReadOnlySource, AudioStream, AudioStreamError, Compose, Input,
-        YoutubeDl,
-    },
-    tracks::TrackHandle,
+    Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent,
+    input::{Input, YoutubeDl},
 };
-use std::collections::HashSet;
 use std::{
-    pin::Pin,
-    process::Stdio,
-    task::{Context as TaskContext, Poll},
+    collections::HashSet,
+    sync::Arc,
+    time::{Duration, Instant},
 };
-use symphonia::core::io::MediaSource;
-use tokio::io::{AsyncRead, ReadBuf};
-use tokio::process::{Child, ChildStdout};
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 use crate::{AppState, AppStateInner, models::guild_settings::GuildSettings};
-
-pub const DEFAULT_VOLUME: f32 = 1.0;
-/// Hard absolute ceiling for `set_volume`. Per-guild config can lower this further.
-pub const MAX_VOLUME: f32 = 2.0;
-
-#[derive(Clone, Debug)]
-pub struct Track {
-    pub id: Uuid,
-    pub title: String,
-    pub url: String,
-    pub duration: Option<Duration>,
-    pub requested_by_name: String,
-    #[allow(dead_code)]
-    pub requested_by_id: UserId,
-    pub is_live: bool,
-}
-
-impl Track {
-    pub fn new(
-        title: String,
-        url: String,
-        duration: Option<Duration>,
-        requested_by_name: String,
-        requested_by_id: UserId,
-        is_live: bool,
-    ) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            title,
-            url,
-            duration,
-            requested_by_name,
-            requested_by_id,
-            is_live,
-        }
-    }
-}
-
-pub fn format_duration(d: Option<Duration>) -> String {
-    match d {
-        None => "?".to_string(),
-        Some(d) => format_secs(d),
-    }
-}
-
-pub fn format_secs(d: Duration) -> String {
-    let secs = d.as_secs();
-    let h = secs / 3600;
-    let m = (secs % 3600) / 60;
-    let s = secs % 60;
-    if h > 0 {
-        format!("{h}:{m:02}:{s:02}")
-    } else {
-        format!("{m}:{s:02}")
-    }
-}
-
-pub struct NowPlaying {
-    pub track: Track,
-    pub handle: TrackHandle,
-}
-
-pub struct GuildPlayer {
-    pub queue: VecDeque<Track>,
-    pub current: Option<NowPlaying>,
-    pub idle_since: Option<Instant>,
-    pub volume: f32,
-    pub max_volume: f32,
-    pub idle_leave: Duration,
-    settings_loaded: bool,
-}
-
-impl Default for GuildPlayer {
-    fn default() -> Self {
-        Self {
-            queue: VecDeque::new(),
-            current: None,
-            idle_since: None,
-            volume: DEFAULT_VOLUME,
-            max_volume: MAX_VOLUME,
-            idle_leave: Duration::from_secs(300),
-            settings_loaded: false,
-        }
-    }
-}
-
-pub struct MusicManager {
-    songbird: Arc<Songbird>,
-    players: RwLock<HashMap<GuildId, Arc<Mutex<GuildPlayer>>>>,
-    events: RwLock<HashMap<GuildId, broadcast::Sender<()>>>,
-    http_client: reqwest::Client,
-}
-
-impl MusicManager {
-    pub fn new() -> Self {
-        Self {
-            songbird: Songbird::serenity(),
-            players: RwLock::new(HashMap::new()),
-            events: RwLock::new(HashMap::new()),
-            http_client: reqwest::Client::new(),
-        }
-    }
-    fn event_sender(&self, guild_id: GuildId) -> broadcast::Sender<()> {
-        if let Some(tx) = self.events.read().unwrap().get(&guild_id) {
-            return tx.clone();
-        }
-        self.events
-            .write()
-            .unwrap()
-            .entry(guild_id)
-            .or_insert_with(|| broadcast::channel(32).0)
-            .clone()
-    }
-    pub fn subscribe(&self, guild_id: GuildId) -> broadcast::Receiver<()> {
-        self.event_sender(guild_id).subscribe()
-    }
-    pub fn notify(&self, guild_id: GuildId) {
-        let _ = self.event_sender(guild_id).send(());
-    }
-    pub fn songbird(&self) -> Arc<Songbird> {
-        self.songbird.clone()
-    }
-    pub fn http_client(&self) -> reqwest::Client {
-        self.http_client.clone()
-    }
-    pub fn player(&self, guild_id: GuildId) -> Arc<Mutex<GuildPlayer>> {
-        if let Some(p) = self.players.read().unwrap().get(&guild_id) {
-            return p.clone();
-        }
-        self.players
-            .write()
-            .unwrap()
-            .entry(guild_id)
-            .or_insert_with(|| Arc::new(Mutex::new(GuildPlayer::default())))
-            .clone()
-    }
-    pub fn try_get_player(&self, guild_id: GuildId) -> Option<Arc<Mutex<GuildPlayer>>> {
-        self.players.read().unwrap().get(&guild_id).cloned()
-    }
-    fn all_guild_ids(&self) -> Vec<GuildId> {
-        self.players.read().unwrap().keys().copied().collect()
-    }
-    pub fn is_connected(&self, guild_id: GuildId) -> bool {
-        self.songbird.get(guild_id).is_some()
-    }
-}
-
-#[derive(Deserialize, Debug)]
-struct YtdlpInfo {
-    title: Option<String>,
-    duration: Option<f64>,
-    #[serde(default)]
-    is_live: bool,
-    url: Option<String>,
-    webpage_url: Option<String>,
-}
-
-async fn probe_track(query: &str) -> anyhow::Result<YtdlpInfo> {
-    let q = if query.starts_with("http://") || query.starts_with("https://") {
-        query.to_string()
-    } else {
-        format!("ytsearch1:{query}")
-    };
-    let output = tokio::process::Command::new("yt-dlp")
-        .args([
-            "-j",
-            "--no-playlist",
-            "--no-warnings",
-            "-f",
-            "ba[abr>0][vcodec=none]/best",
-            &q,
-        ])
-        .output()
-        .await
-        .context("Failed to spawn yt-dlp")?;
-    if !output.status.success() {
-        bail!(
-            "yt-dlp failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    // For search queries yt-dlp may emit multiple JSON lines; take the first.
-    let first = output
-        .stdout
-        .split(|&b| b == b'\n')
-        .find(|line| !line.is_empty())
-        .context("yt-dlp produced no output")?;
-    serde_json::from_slice(first).context("Failed to parse yt-dlp output")
-}
+use probe::{YtdlpInfo, dump_playlist, playlist_entry_url, probe_track};
 
 fn build_input(
     client: reqwest::Client,
@@ -233,144 +57,6 @@ fn build_input(
     } else {
         Ok(YoutubeDl::new(client, watch_url.to_string()).into())
     }
-}
-
-/// Transmuxing input: spawns ffmpeg to convert any URL (HLS, DASH, etc.) into
-/// matroska+opus on stdout, which symphonia + songbird's opus passthrough can
-/// consume cleanly. Used for live streams where the raw stream format isn't
-/// directly playable by symphonia.
-pub struct FfmpegInput {
-    url: String,
-}
-
-impl FfmpegInput {
-    pub fn new(url: String) -> Self {
-        Self { url }
-    }
-}
-
-impl From<FfmpegInput> for Input {
-    fn from(val: FfmpegInput) -> Self {
-        Input::Lazy(Box::new(val))
-    }
-}
-
-/// Wraps ffmpeg's stdout while keeping the Child handle alive so the subprocess
-/// stays running until the source is dropped (at which point kill_on_drop kills it).
-struct FfmpegStdout {
-    _child: Child,
-    stdout: ChildStdout,
-}
-
-impl AsyncRead for FfmpegStdout {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut TaskContext<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.stdout).poll_read(cx, buf)
-    }
-}
-
-#[async_trait::async_trait]
-impl Compose for FfmpegInput {
-    fn create(&mut self) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
-        Err(AudioStreamError::Unsupported)
-    }
-
-    async fn create_async(
-        &mut self,
-    ) -> Result<AudioStream<Box<dyn MediaSource>>, AudioStreamError> {
-        let mut child = tokio::process::Command::new("ffmpeg")
-            .kill_on_drop(true)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .args([
-                "-loglevel",
-                "error",
-                "-i",
-                &self.url,
-                "-vn",
-                "-c:a",
-                "libopus",
-                "-b:a",
-                "128k",
-                "-f",
-                "matroska",
-                "pipe:1",
-            ])
-            .spawn()
-            .map_err(|e| AudioStreamError::Fail(Box::new(e)))?;
-
-        let stdout = child.stdout.take().ok_or_else(|| {
-            AudioStreamError::Fail(std::io::Error::other("ffmpeg stdout missing").into())
-        })?;
-
-        let wrapped = FfmpegStdout {
-            _child: child,
-            stdout,
-        };
-        let source = AsyncReadOnlySource::new(wrapped);
-        let stream = AsyncAdapterStream::new(Box::new(source), 64 * 1024);
-
-        Ok(AudioStream {
-            input: Box::new(stream) as Box<dyn MediaSource>,
-        })
-    }
-
-    fn should_create_async(&self) -> bool {
-        true
-    }
-}
-
-pub fn is_playlist_url(s: &str) -> bool {
-    let s = s.trim().trim_end_matches('/');
-    s.contains("youtube.com/playlist") || s.contains("music.youtube.com/playlist")
-}
-
-#[derive(Deserialize)]
-struct YtdlPlaylist {
-    title: Option<String>,
-    #[serde(default)]
-    entries: Vec<YtdlPlaylistEntry>,
-}
-
-#[derive(Deserialize)]
-struct YtdlPlaylistEntry {
-    id: Option<String>,
-    title: Option<String>,
-    duration: Option<f64>,
-    url: Option<String>,
-    webpage_url: Option<String>,
-}
-
-fn playlist_entry_url(entry: &YtdlPlaylistEntry) -> Option<String> {
-    if let Some(u) = entry.webpage_url.as_ref().filter(|u| u.starts_with("http")) {
-        return Some(u.clone());
-    }
-    if let Some(u) = entry.url.as_ref().filter(|u| u.starts_with("http")) {
-        return Some(u.clone());
-    }
-    entry
-        .id
-        .as_ref()
-        .map(|id| format!("https://www.youtube.com/watch?v={id}"))
-}
-
-async fn dump_playlist(url: &str) -> anyhow::Result<YtdlPlaylist> {
-    let output = tokio::process::Command::new("yt-dlp")
-        .args(["--flat-playlist", "-J", "--no-warnings", url])
-        .output()
-        .await
-        .context("Failed to spawn yt-dlp for playlist dump")?;
-    if !output.status.success() {
-        bail!(
-            "yt-dlp playlist dump failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    serde_json::from_slice(&output.stdout).context("Failed to parse yt-dlp playlist JSON")
 }
 
 pub struct PlaylistResult {
