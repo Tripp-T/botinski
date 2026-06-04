@@ -96,3 +96,93 @@ pub async fn dump_playlist(url: &str) -> anyhow::Result<YtdlPlaylist> {
     }
     serde_json::from_slice(&output.stdout).context("Failed to parse yt-dlp playlist JSON")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn playlist_url_matches_youtube_and_yt_music() {
+        assert!(is_playlist_url(
+            "https://www.youtube.com/playlist?list=PLfoo"
+        ));
+        assert!(is_playlist_url("https://youtube.com/playlist?list=PLfoo"));
+        assert!(is_playlist_url(
+            "https://music.youtube.com/playlist?list=PLfoo"
+        ));
+        // trailing slash tolerated
+        assert!(is_playlist_url("https://www.youtube.com/playlist/"));
+    }
+
+    #[test]
+    fn watch_urls_with_list_param_are_not_classified_as_playlists() {
+        // We deliberately treat watch URLs with a list= param as single videos —
+        // user can pass a pure /playlist URL to actually expand the list.
+        assert!(!is_playlist_url(
+            "https://www.youtube.com/watch?v=abc&list=PLfoo"
+        ));
+        assert!(!is_playlist_url("https://youtu.be/abc"));
+    }
+
+    #[test]
+    fn non_youtube_urls_are_not_classified_as_playlists() {
+        assert!(!is_playlist_url("https://example.com/playlist"));
+        assert!(!is_playlist_url("not a url at all"));
+        assert!(!is_playlist_url(""));
+    }
+
+    fn entry(id: Option<&str>, url: Option<&str>, webpage_url: Option<&str>) -> YtdlPlaylistEntry {
+        YtdlPlaylistEntry {
+            id: id.map(str::to_string),
+            title: None,
+            duration: None,
+            url: url.map(str::to_string),
+            webpage_url: webpage_url.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn playlist_entry_url_prefers_webpage_url() {
+        let e = entry(
+            Some("abc"),
+            Some("https://example.com/u"),
+            Some("https://example.com/w"),
+        );
+        assert_eq!(
+            playlist_entry_url(&e).as_deref(),
+            Some("https://example.com/w")
+        );
+    }
+
+    #[test]
+    fn playlist_entry_url_falls_back_to_url_then_id() {
+        let only_url = entry(Some("abc"), Some("https://example.com/u"), None);
+        assert_eq!(
+            playlist_entry_url(&only_url).as_deref(),
+            Some("https://example.com/u")
+        );
+
+        let only_id = entry(Some("dQw4w9WgXcQ"), None, None);
+        assert_eq!(
+            playlist_entry_url(&only_id).as_deref(),
+            Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        );
+    }
+
+    #[test]
+    fn playlist_entry_url_skips_non_http_url_field() {
+        // Some flat-playlist entries put bare ids in `url`; we should treat those
+        // as missing and fall through to the id-based fallback.
+        let e = entry(Some("xyz"), Some("dQw4w9WgXcQ"), None);
+        assert_eq!(
+            playlist_entry_url(&e).as_deref(),
+            Some("https://www.youtube.com/watch?v=xyz")
+        );
+    }
+
+    #[test]
+    fn playlist_entry_url_none_when_nothing_usable() {
+        let e = entry(None, None, None);
+        assert!(playlist_entry_url(&e).is_none());
+    }
+}

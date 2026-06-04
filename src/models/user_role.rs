@@ -25,21 +25,27 @@ pub const ROLE_CACHE_TTL: Duration = Duration::from_secs(60);
 /// so logout can invalidate without consulting Discord.
 pub struct RoleCache {
     inner: RwLock<HashMap<Uuid, (AppUserRole, Instant)>>,
+    ttl: Duration,
 }
 
 impl Default for RoleCache {
     fn default() -> Self {
-        Self {
-            inner: RwLock::new(HashMap::new()),
-        }
+        Self::with_ttl(ROLE_CACHE_TTL)
     }
 }
 
 impl RoleCache {
+    pub fn with_ttl(ttl: Duration) -> Self {
+        Self {
+            inner: RwLock::new(HashMap::new()),
+            ttl,
+        }
+    }
+
     pub fn get(&self, user_id: Uuid) -> Option<AppUserRole> {
         let guard = self.inner.read().unwrap();
         let (role, cached_at) = guard.get(&user_id)?;
-        (cached_at.elapsed() < ROLE_CACHE_TTL).then(|| role.clone())
+        (cached_at.elapsed() < self.ttl).then(|| role.clone())
     }
 
     pub fn put(&self, user_id: Uuid, role: AppUserRole) {
@@ -53,12 +59,12 @@ impl RoleCache {
         self.inner.write().unwrap().remove(&user_id);
     }
 
-    /// Drops entries older than [`ROLE_CACHE_TTL`]. Intended for a periodic
+    /// Drops entries older than the cache's TTL. Intended for a periodic
     /// background sweep so dormant users don't permanently occupy memory.
     pub fn sweep(&self) -> usize {
         let mut guard = self.inner.write().unwrap();
         let before = guard.len();
-        guard.retain(|_, (_, cached_at)| cached_at.elapsed() < ROLE_CACHE_TTL);
+        guard.retain(|_, (_, cached_at)| cached_at.elapsed() < self.ttl);
         before - guard.len()
     }
 }
@@ -217,4 +223,117 @@ fn member_is_admin(
             .get(role_id)
             .is_some_and(|r| r.permissions.contains(Permissions::ADMINISTRATOR))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn gid(n: u64) -> GuildId {
+        GuildId::new(n)
+    }
+
+    #[test]
+    fn anonymous_classifier_methods() {
+        let role = AppUserRole::Anonymous;
+        assert!(!role.is_authenticated());
+        assert!(!role.is_member_of(gid(1)));
+        assert!(!role.is_admin_of(gid(1)));
+        assert!(role.mutual_guilds().is_empty());
+    }
+
+    #[test]
+    fn foreign_is_authenticated_but_not_a_member() {
+        let role = AppUserRole::Foreign;
+        assert!(role.is_authenticated());
+        assert!(!role.is_member_of(gid(1)));
+        assert!(!role.is_admin_of(gid(1)));
+        assert!(role.mutual_guilds().is_empty());
+    }
+
+    #[test]
+    fn member_classifies_by_guild_list() {
+        let role = AppUserRole::Member {
+            guilds: vec![gid(1), gid(2)],
+        };
+        assert!(role.is_authenticated());
+        assert!(role.is_member_of(gid(1)));
+        assert!(role.is_member_of(gid(2)));
+        assert!(!role.is_member_of(gid(3)));
+        // member ≠ admin
+        assert!(!role.is_admin_of(gid(1)));
+        assert_eq!(role.mutual_guilds(), &[gid(1), gid(2)]);
+    }
+
+    #[test]
+    fn guild_admin_member_and_admin_lists_are_independent() {
+        let role = AppUserRole::GuildAdmin {
+            member: vec![gid(1), gid(2)],
+            admin: vec![gid(1)],
+        };
+        assert!(role.is_member_of(gid(1)));
+        assert!(role.is_member_of(gid(2)));
+        assert!(role.is_admin_of(gid(1)));
+        assert!(!role.is_admin_of(gid(2)));
+        assert!(!role.is_admin_of(gid(3)));
+        assert_eq!(role.mutual_guilds(), &[gid(1), gid(2)]);
+    }
+
+    #[test]
+    fn global_admin_passes_every_check() {
+        let role = AppUserRole::GlobalAdmin;
+        assert!(role.is_authenticated());
+        assert!(role.is_member_of(gid(42)));
+        assert!(role.is_admin_of(gid(42)));
+        // mutual_guilds is empty even for GlobalAdmin — callers should special-case
+        // by checking matches!(role, GlobalAdmin) when they need "all bot guilds".
+        assert!(role.mutual_guilds().is_empty());
+    }
+
+    #[test]
+    fn role_cache_returns_none_on_empty() {
+        let cache = RoleCache::default();
+        assert!(cache.get(Uuid::new_v4()).is_none());
+    }
+
+    #[test]
+    fn role_cache_round_trip_within_ttl() {
+        let cache = RoleCache::with_ttl(Duration::from_secs(60));
+        let id = Uuid::new_v4();
+        cache.put(id, AppUserRole::Foreign);
+        assert!(matches!(cache.get(id), Some(AppUserRole::Foreign)));
+    }
+
+    #[test]
+    fn role_cache_invalidate_removes_entry() {
+        let cache = RoleCache::default();
+        let id = Uuid::new_v4();
+        cache.put(id, AppUserRole::Foreign);
+        cache.invalidate(id);
+        assert!(cache.get(id).is_none());
+    }
+
+    #[test]
+    fn role_cache_get_returns_none_after_ttl() {
+        let cache = RoleCache::with_ttl(Duration::from_millis(20));
+        let id = Uuid::new_v4();
+        cache.put(id, AppUserRole::Foreign);
+        std::thread::sleep(Duration::from_millis(40));
+        assert!(cache.get(id).is_none());
+    }
+
+    #[test]
+    fn role_cache_sweep_drops_expired_only() {
+        let cache = RoleCache::with_ttl(Duration::from_millis(30));
+        let old = Uuid::new_v4();
+        cache.put(old, AppUserRole::Foreign);
+        std::thread::sleep(Duration::from_millis(40));
+        let fresh = Uuid::new_v4();
+        cache.put(fresh, AppUserRole::GlobalAdmin);
+
+        let dropped = cache.sweep();
+        assert_eq!(dropped, 1);
+        assert!(cache.get(old).is_none());
+        assert!(cache.get(fresh).is_some());
+    }
 }

@@ -60,3 +60,53 @@ pub fn format_secs(d: Duration) -> String {
         format!("{m}:{s:02}")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_secs_under_an_hour() {
+        assert_eq!(format_secs(Duration::from_secs(0)), "0:00");
+        assert_eq!(format_secs(Duration::from_secs(5)), "0:05");
+        assert_eq!(format_secs(Duration::from_secs(75)), "1:15");
+        assert_eq!(format_secs(Duration::from_secs(3599)), "59:59");
+    }
+
+    #[test]
+    fn format_secs_over_an_hour_includes_h_segment() {
+        assert_eq!(format_secs(Duration::from_secs(3600)), "1:00:00");
+        assert_eq!(format_secs(Duration::from_secs(3665)), "1:01:05");
+        assert_eq!(
+            format_secs(Duration::from_secs(36_000 + 600 + 5)),
+            "10:10:05"
+        );
+    }
+
+    #[test]
+    fn format_duration_renders_question_mark_for_unknown() {
+        assert_eq!(format_duration(None), "?");
+        assert_eq!(format_duration(Some(Duration::from_secs(90))), "1:30");
+    }
+
+    #[test]
+    fn track_new_assigns_unique_ids() {
+        let a = Track::new(
+            "a".into(),
+            "u".into(),
+            None,
+            "r".into(),
+            poise::serenity_prelude::UserId::new(1),
+            false,
+        );
+        let b = Track::new(
+            "a".into(),
+            "u".into(),
+            None,
+            "r".into(),
+            poise::serenity_prelude::UserId::new(1),
+            false,
+        );
+        assert_ne!(a.id, b.id);
+    }
+}

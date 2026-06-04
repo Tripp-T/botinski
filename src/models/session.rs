@@ -179,3 +179,128 @@ impl AppSessionCookie {
         format!("{}:{}", self.id, self.token)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::user::AppUser;
+    use poise::serenity_prelude::UserId;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    async fn fresh_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect to in-memory sqlite");
+        sqlx::migrate!().run(&pool).await.expect("run migrations");
+        pool
+    }
+
+    async fn seed_user(pool: &SqlitePool) -> Uuid {
+        let user = AppUser::new(
+            pool,
+            UserId::new(1),
+            "test".into(),
+            "test@example.com".into(),
+        )
+        .await
+        .unwrap();
+        user.id
+    }
+
+    fn local_ip() -> IpAddr {
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+    }
+
+    #[tokio::test]
+    async fn new_then_get_by_id_round_trip() {
+        let pool = fresh_pool().await;
+        let user_id = seed_user(&pool).await;
+        let (session, _token) = AppSession::new(&pool, user_id, "ua".into(), local_ip())
+            .await
+            .unwrap();
+
+        let fetched = AppSession::get_by_id(&pool, session.id).await.unwrap();
+        let fetched = fetched.expect("session should exist");
+        assert_eq!(fetched.id, session.id);
+        assert_eq!(fetched.user_id, user_id);
+        assert_eq!(fetched.user_agent, "ua");
+        assert_eq!(fetched.ip, local_ip().to_string());
+    }
+
+    #[tokio::test]
+    async fn delete_by_id_removes_session() {
+        let pool = fresh_pool().await;
+        let user_id = seed_user(&pool).await;
+        let (session, _) = AppSession::new(&pool, user_id, "ua".into(), local_ip())
+            .await
+            .unwrap();
+
+        AppSession::delete_by_id(&pool, session.id).await.unwrap();
+        assert!(
+            AppSession::get_by_id(&pool, session.id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_expired_only_reaps_past_due_rows() {
+        let pool = fresh_pool().await;
+        let user_id = seed_user(&pool).await;
+        let (live, _) = AppSession::new(&pool, user_id, "ua".into(), local_ip())
+            .await
+            .unwrap();
+
+        // Insert an already-expired session directly so we don't have to wait.
+        let expired_id = Uuid::new_v4();
+        let expired_at = Utc::now() - Duration::days(1);
+        let expired_created = Utc::now() - Duration::days(2);
+        let hashed: Vec<u8> = vec![0u8; 32];
+        let ip = local_ip().to_string();
+        sqlx::query!(
+            "INSERT INTO sessions (id, hashed_token, user_id, user_agent, ip, created_at, expires_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            expired_id,
+            hashed,
+            user_id,
+            "stale",
+            ip,
+            expired_created,
+            expired_at,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let reaped = AppSession::delete_expired(&pool).await.unwrap();
+        assert_eq!(reaped, 1);
+        assert!(
+            AppSession::get_by_id(&pool, expired_id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            AppSession::get_by_id(&pool, live.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn cookie_round_trip_preserves_id_and_token() {
+        let id = Uuid::new_v4();
+        let token = "abc.def".to_string();
+        let raw = AppSessionCookie::new(id, token.clone()).to_cookie_value();
+        let parsed = AppSessionCookie::from_cookie_str(&raw).unwrap();
+        assert_eq!(parsed.id, id);
+        assert_eq!(parsed.token, token);
+    }
+
+    #[test]
+    fn cookie_parse_rejects_missing_separator() {
+        assert!(AppSessionCookie::from_cookie_str("nope").is_err());
+    }
+}

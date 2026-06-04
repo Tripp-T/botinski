@@ -133,6 +133,88 @@ impl GuildSettings {
 mod tests {
     use super::*;
 
+    async fn fresh_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect to in-memory sqlite");
+        sqlx::migrate!().run(&pool).await.expect("run migrations");
+        pool
+    }
+
+    #[tokio::test]
+    async fn get_returns_none_for_unconfigured_guild() {
+        let pool = fresh_pool().await;
+        let row = GuildSettings::get(&pool, GuildId::new(1)).await.unwrap();
+        assert!(row.is_none());
+    }
+
+    #[tokio::test]
+    async fn upsert_volume_then_get_round_trip() {
+        let pool = fresh_pool().await;
+        let gid = GuildId::new(42);
+        GuildSettings::upsert_volume(&pool, gid, 0.75)
+            .await
+            .unwrap();
+
+        let row = GuildSettings::get(&pool, gid).await.unwrap().unwrap();
+        assert!((row.volume - 0.75).abs() < 1e-6);
+        // unchanged fields keep their column defaults
+        assert!((row.max_volume - DEFAULT_MAX_VOLUME).abs() < 1e-6);
+        assert_eq!(row.idle_leave_secs, DEFAULT_IDLE_LEAVE_SECS);
+        assert!(row.admin_role_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn upsert_volume_updates_existing_row() {
+        let pool = fresh_pool().await;
+        let gid = GuildId::new(7);
+        GuildSettings::upsert_volume(&pool, gid, 0.5).await.unwrap();
+        GuildSettings::upsert_volume(&pool, gid, 1.25)
+            .await
+            .unwrap();
+
+        let row = GuildSettings::get(&pool, gid).await.unwrap().unwrap();
+        assert!((row.volume - 1.25).abs() < 1e-6);
+    }
+
+    #[tokio::test]
+    async fn upsert_max_volume_and_idle_leave_independently() {
+        let pool = fresh_pool().await;
+        let gid = GuildId::new(99);
+        GuildSettings::upsert_max_volume(&pool, gid, 1.5)
+            .await
+            .unwrap();
+        GuildSettings::upsert_idle_leave_secs(&pool, gid, 0)
+            .await
+            .unwrap();
+
+        let row = GuildSettings::get(&pool, gid).await.unwrap().unwrap();
+        assert!((row.max_volume - 1.5).abs() < 1e-6);
+        assert_eq!(row.idle_leave_secs, 0);
+        // volume kept its column default
+        assert!((row.volume - 1.0).abs() < 1e-6);
+    }
+
+    #[tokio::test]
+    async fn upsert_admin_role_ids_round_trip_through_db() {
+        let pool = fresh_pool().await;
+        let gid = GuildId::new(123);
+        let ids = vec![RoleId::new(1), RoleId::new(u64::MAX)];
+        GuildSettings::upsert_admin_role_ids(&pool, gid, &ids)
+            .await
+            .unwrap();
+
+        let row = GuildSettings::get(&pool, gid).await.unwrap().unwrap();
+        assert_eq!(row.admin_role_ids, ids);
+
+        // overwriting with empty wipes the list
+        GuildSettings::upsert_admin_role_ids(&pool, gid, &[])
+            .await
+            .unwrap();
+        let row = GuildSettings::get(&pool, gid).await.unwrap().unwrap();
+        assert!(row.admin_role_ids.is_empty());
+    }
+
     #[test]
     fn admin_role_ids_round_trip_large_snowflakes() {
         // Discord snowflakes can exceed 2^53; verify our string-encoding survives
