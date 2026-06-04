@@ -41,7 +41,7 @@
             };
           }
         );
-      cargoFile = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+      cargoFile = fromTOML (builtins.readFile ./Cargo.toml);
 
       # Per-system project setup. Calls to this are cheap to repeat across
       # outputs: derivations are content-addressed so Nix dedupes the actual
@@ -104,6 +104,8 @@
         };
     in
     {
+      nixosModules.default = import ./nix/module.nix inputs.self;
+
       packages = forEachSupportedSystem (
         { pkgs }:
         let
