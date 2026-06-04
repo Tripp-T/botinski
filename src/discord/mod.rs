@@ -148,10 +148,24 @@ async fn event_handler(
     match event {
         FullEvent::Ready { data_about_bot, .. } => {
             info!("Connected to Discord as '{}'", data_about_bot.user.name);
+            // OAuth scopes: `bot` to join the guild, `applications.commands` so
+            // slash commands actually register.
+            //
+            // Permissions cover the bot's actual feature surface — text replies
+            // (View Channel + Send Messages + Embed Links + Read History) and
+            // voice playback (Connect + Speak + Use VAD so push-to-talk isn't
+            // forced on the bot).
+            let perms = Permissions::VIEW_CHANNEL
+                | Permissions::SEND_MESSAGES
+                | Permissions::EMBED_LINKS
+                | Permissions::READ_MESSAGE_HISTORY
+                | Permissions::CONNECT
+                | Permissions::SPEAK
+                | Permissions::USE_VAD;
             info!(
-                "Invite URL: https://discord.com/oauth2/authorize?client_id={}&scope=bot&permissions={}",
+                "Invite URL: https://discord.com/oauth2/authorize?client_id={}&scope=bot+applications.commands&permissions={}",
                 data_about_bot.application.id,
-                (Permissions::VIEW_CHANNEL | Permissions::SEND_MESSAGES).bits()
+                perms.bits()
             );
             Ok(())
         }
