@@ -63,6 +63,7 @@ pub(super) async fn page_guild_roles(
             GuildSnapshot {
                 name: g.name.clone(),
                 cached_member_total: g.members.len(),
+                guild_member_count: g.member_count,
                 roles,
             }
         })
@@ -87,10 +88,14 @@ pub(super) async fn page_guild_roles(
                         { "← Overview" }
                 }
 
-                div class="text-xs text-gray-500 italic" {
-                    "Member counts are from the bot's local cache only. Without the privileged GUILD_MEMBERS intent enabled, this reflects members the bot has interacted with recently (≈ "
-                    (snap.cached_member_total)
-                    " cached) and is not authoritative."
+                @if snap.cached_member_total < snap.guild_member_count as usize {
+                    div class="text-xs text-gray-500 italic" {
+                        "Member counts reflect the bot's local cache ("
+                        (snap.cached_member_total)
+                        " of "
+                        (snap.guild_member_count)
+                        " populated). The GUILD_MEMBERS chunk events fill it over time after startup."
+                    }
                 }
 
                 @if snap.roles.is_empty() {
@@ -111,6 +116,7 @@ pub(super) async fn page_guild_roles(
 struct GuildSnapshot {
     name: String,
     cached_member_total: usize,
+    guild_member_count: u64,
     roles: Vec<RoleRow>,
 }
 

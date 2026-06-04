@@ -8,10 +8,22 @@ use tracing::{debug, info};
 mod commands;
 mod music_commands;
 
+// Gateway intents.
+//
+// non_privileged() gives us GUILDS, GUILD_VOICE_STATES, etc.
+// MESSAGE_CONTENT (privileged) is needed for prefix commands' message body.
+// GUILD_MEMBERS (privileged) populates the full guild.members cache so the
+//   members / roles drill-downs are authoritative, and so admin-role checks
+//   don't need to fall back to fetching members one at a time.
+//
+// Both privileged intents must ALSO be enabled in the Discord Developer Portal
+// (Bot tab → Privileged Gateway Intents → Server Members Intent / Message
+// Content Intent). For bots in >100 guilds, Discord requires verification.
 static INTENTS: LazyLock<GatewayIntents> = LazyLock::new(|| {
     GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILD_MEMBERS
         | GatewayIntents::non_privileged()
 });
 

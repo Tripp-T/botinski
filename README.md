@@ -5,7 +5,9 @@ A Discord music bot — slash commands, per-guild settings, and a live SSE-drive
 ## Prerequisites
 
 - Rust (stable) — or use the Nix dev shell (recommended)
-- A Discord application & bot token — create one at the [Discord Developer Portal](https://discord.com/developers/applications)
+- A Discord application & bot token — create one at the [Discord Developer Portal](https://discord.com/developers/applications). Two privileged gateway intents must be enabled under the Bot tab → Privileged Gateway Intents:
+  - **Message Content Intent** — for prefix-style commands
+  - **Server Members Intent** — populates the member cache used by the members / roles drill-down pages and per-guild admin-role checks
 - `sqlx-cli` — for managing database migrations
 - `just` — optional, for migration shortcuts
 

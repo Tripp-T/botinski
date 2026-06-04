@@ -94,13 +94,18 @@ pub(super) async fn page_guild_members(
                         { "← Overview" }
                 }
 
-                div class="rounded-lg bg-amber-900/20 border border-amber-700/40 p-3 text-xs text-amber-200" {
-                    "This guild has " strong { (snap.member_count) } " members total, but botinski only has "
-                    strong { (snap.cached_count) }
-                    " cached locally. The full list requires Discord's privileged "
-                    code class="px-1 py-0.5 rounded bg-amber-900/40" { "GUILD_MEMBERS" }
-                    " intent — currently disabled. Below: cached members plus everyone currently in voice ("
-                    (snap.voice_count) ")."
+                @if snap.cached_count < snap.member_count as usize {
+                    div class="rounded-lg bg-amber-900/20 border border-amber-700/40 p-3 text-xs text-amber-200" {
+                        "Showing " strong { (snap.cached_count) } " of "
+                        strong { (snap.member_count) }
+                        " members. The bot's cache fills over time once the GUILD_MEMBERS chunk events arrive; large guilds may take a few seconds after startup, and the privileged intent must be enabled in the Discord Developer Portal. "
+                        (snap.voice_count) " currently in voice."
+                    }
+                } @else {
+                    div class="text-xs text-gray-500" {
+                        (snap.member_count) " members, "
+                        (snap.voice_count) " in voice."
+                    }
                 }
 
                 @if snap.members.is_empty() {
