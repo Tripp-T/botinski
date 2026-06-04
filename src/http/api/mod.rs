@@ -54,11 +54,14 @@ async fn healthcheck(
 async fn oauth_login(State(state): State<AppState>, cookies: Cookies) -> Redirect {
     let (url, csrf) = state.oauth.get_login_url();
     cookies.add({
-        use tower_cookies::cookie::time;
+        use tower_cookies::cookie::{self, time};
         let mut cookie = Cookie::new("csrf", csrf.into_secret());
-        cookie.set_expires(tower_cookies::cookie::Expiration::DateTime(
+        cookie.set_expires(cookie::Expiration::DateTime(
             time::OffsetDateTime::now_utc() + time::Duration::minutes(5),
         ));
+        cookie.set_http_only(true);
+        cookie.set_same_site(cookie::SameSite::Lax);
+        cookie.set_path("/");
         cookie
     });
     Redirect::to(url.as_str())
@@ -139,13 +142,15 @@ async fn oauth_callback(
 
     let private_cookies = cookies.private(&cookie_key);
     private_cookies.add({
-        use tower_cookies::cookie::time;
+        use tower_cookies::cookie::{self, time};
         let mut cookie = Cookie::new(
             "user-session",
             AppSessionCookie::new(session.id, session_token).to_cookie_value(),
         );
         cookie.set_expires(time::OffsetDateTime::now_utc() + time::Duration::days(15));
         cookie.set_path("/");
+        cookie.set_http_only(true);
+        cookie.set_same_site(cookie::SameSite::Lax);
         cookie
     });
     Ok(Redirect::to("/profile").into_response())

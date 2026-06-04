@@ -128,3 +128,37 @@ impl GuildSettings {
         .map(|_| ())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admin_role_ids_round_trip_large_snowflakes() {
+        // Discord snowflakes can exceed 2^53; verify our string-encoding survives
+        // the round trip without precision loss.
+        let ids = vec![
+            RoleId::new(1),
+            RoleId::new(987654321098765432),
+            RoleId::new(u64::MAX),
+        ];
+        let encoded = encode_admin_role_ids(&ids);
+        let decoded = parse_admin_role_ids(&encoded);
+        assert_eq!(decoded, ids);
+    }
+
+    #[test]
+    fn admin_role_ids_empty_round_trip() {
+        let encoded = encode_admin_role_ids(&[]);
+        assert_eq!(encoded, "[]");
+        let decoded = parse_admin_role_ids(&encoded);
+        assert!(decoded.is_empty());
+    }
+
+    #[test]
+    fn admin_role_ids_parse_garbage_yields_empty() {
+        // Bad JSON shouldn't panic; we should yield an empty list and keep going.
+        assert!(parse_admin_role_ids("not json").is_empty());
+        assert!(parse_admin_role_ids("[1, 2, 3]").is_empty()); // numbers, not strings
+    }
+}
