@@ -56,3 +56,18 @@ impl OauthManager {
             .context("Failed to exchange oauth token")
     }
 }
+
+#[cfg(test)]
+impl OauthManager {
+    pub(crate) fn for_test() -> anyhow::Result<Self> {
+        let auth_url = AuthUrl::new("https://example.invalid/auth".to_string())?;
+        let token_url = TokenUrl::new("https://example.invalid/token".to_string())?;
+        let redirect_url = RedirectUrl::new("http://localhost/cb".to_string())?;
+        let client = oauth2::basic::BasicClient::new(ClientId::new("test".into()))
+            .set_client_secret(ClientSecret::new("test".into()))
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url)
+            .set_redirect_uri(redirect_url);
+        Ok(Self(client))
+    }
+}

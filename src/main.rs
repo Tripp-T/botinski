@@ -114,6 +114,21 @@ impl AppStateInner {
     }
 }
 
+#[cfg(test)]
+impl AppStateInner {
+    pub(crate) fn for_test(pool: sqlx::SqlitePool) -> Result<Self> {
+        Ok(AppStateInner {
+            config: ConfigManager::for_test(),
+            db: DBManager::from_pool(pool),
+            oauth: OauthManager::for_test()?,
+            music: MusicManager::new(),
+            role_cache: RoleCache::default(),
+            discord_http: OnceCell::new(),
+            shutdown_token: CancellationToken::new(),
+        })
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_logging();

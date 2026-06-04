@@ -82,6 +82,10 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
     .context("HTTP server failed to run")
 }
 
+// HttpError is stashed in axum::Extensions by `into_response` so the
+// error-formatting middleware can render it. `Extensions::insert` requires
+// `Clone`, and anyhow::Error isn't Clone — we wrap in Arc, which preserves the
+// full source chain AND makes the variant cheaply cloneable.
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum HttpError {
     #[error("Unauthorized")]
@@ -91,13 +95,14 @@ pub enum HttpError {
     #[error("Not Found")]
     NotFound,
     #[error("Internal Error: {0}")]
-    Internal(String),
+    Internal(std::sync::Arc<anyhow::Error>),
     #[error("Bad Request: {0}")]
     BadRequest(String),
 }
+
 impl From<anyhow::Error> for HttpError {
     fn from(value: anyhow::Error) -> Self {
-        Self::Internal(value.to_string())
+        Self::Internal(std::sync::Arc::new(value))
     }
 }
 impl HttpError {

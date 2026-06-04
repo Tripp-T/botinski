@@ -202,7 +202,7 @@ pub(super) fn render_state(view: MusicView<'_>) -> Markup {
                             value=(vol_pct)
                             class="accent-blue-500 w-32 h-1.5 cursor-pointer align-middle"
                             hx-post=(format!("/api/guilds/{g}/music/volume"))
-                            hx-trigger="change"
+                            hx-trigger="change throttle:300ms"
                             hx-target="#music-state"
                             hx-swap="innerHTML"
                             hx-include="this"

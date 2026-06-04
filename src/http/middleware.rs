@@ -20,7 +20,9 @@ pub async fn middleware_error_formatting(
 ) -> Response {
     let mut response = next.run(req).await;
     if let Some(error) = response.extensions_mut().remove::<HttpError>() {
-        error!("{error}");
+        // {:?} surfaces the full anyhow source chain for Internal errors;
+        // shorter variants fall back to their derive(Debug) repr.
+        error!("{error:?}");
         return (
             error.as_status(),
             tmpl.set_title(error.title()).render(component_card(

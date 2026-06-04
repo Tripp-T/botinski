@@ -174,3 +174,68 @@ async fn oauth_logout(
         .make_removal();
     Ok(Redirect::to("/"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AppStateInner;
+    use axum::body::Body;
+    use axum::http::Request;
+    use sqlx::SqlitePool;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+    use tower_cookies::CookieManagerLayer;
+
+    async fn test_app() -> Router {
+        let pool = SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect to in-memory sqlite");
+        sqlx::migrate!()
+            .run(&pool)
+            .await
+            .expect("run migrations on test db");
+        let state: AppState = Arc::new(AppStateInner::for_test(pool).expect("build test state"));
+        let cookie_key = tower_cookies::Key::generate();
+
+        api_router(&state)
+            .layer(Extension(cookie_key))
+            .layer(CookieManagerLayer::new())
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn healthcheck_returns_200() {
+        let app = test_app().await;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/healthcheck")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn oauth_logout_without_session_is_unauthorized() {
+        // The handler requires a valid AppSession extractor; with no cookies
+        // present we should be rejected at extraction time.
+        let app = test_app().await;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/oauth/logout")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            axum::http::StatusCode::UNAUTHORIZED,
+            "missing session should yield 401, not 500 or a redirect"
+        );
+    }
+}

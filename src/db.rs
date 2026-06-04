@@ -26,3 +26,10 @@ impl Deref for DBManager {
         &self.0
     }
 }
+
+#[cfg(test)]
+impl DBManager {
+    pub(crate) fn from_pool(pool: Pool<Sqlite>) -> Self {
+        Self(pool)
+    }
+}

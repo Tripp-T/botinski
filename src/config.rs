@@ -39,6 +39,18 @@ impl ConfigManager {
     }
 }
 
+#[cfg(test)]
+impl ConfigManager {
+    pub(crate) fn for_test() -> Self {
+        let data = ConfigData::default();
+        Self {
+            data_hash: data.get_hash(),
+            data: RwLock::new(data),
+            config_path: PathBuf::from("/dev/null/config-stub"),
+        }
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Hash)]
 pub struct ConfigData {
     pub discord: DiscordConfigData,

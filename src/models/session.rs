@@ -106,10 +106,10 @@ impl FromRequestParts<AppState> for AppSession {
         }
 
         let Some(cookie_key) = parts.extensions.get::<tower_cookies::Key>().cloned() else {
-            return Err(HttpError::Internal("Missing cookie key".to_string()));
+            return Err(HttpError::from(anyhow::anyhow!("Missing cookie key")));
         };
         let Ok(cookie_jar) = parts.extract::<tower_cookies::Cookies>().await else {
-            return Err(HttpError::Internal("Failed to get cookies".to_string()));
+            return Err(HttpError::from(anyhow::anyhow!("Failed to get cookies")));
         };
         let private_cookies = cookie_jar.private(&cookie_key);
         let Some(session_cookie) = private_cookies.get("user-session") else {
