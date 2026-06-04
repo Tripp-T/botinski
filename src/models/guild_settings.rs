@@ -4,12 +4,14 @@ use sqlx::SqlitePool;
 
 pub const DEFAULT_MAX_VOLUME: f32 = 2.0;
 pub const DEFAULT_IDLE_LEAVE_SECS: i64 = 300;
+pub const DEFAULT_EMPTY_CHANNEL_LEAVE_SECS: i64 = 60;
 
 #[derive(Debug, Clone)]
 pub struct GuildSettings {
     pub volume: f32,
     pub max_volume: f32,
     pub idle_leave_secs: i64,
+    pub empty_channel_leave_secs: i64,
     pub admin_role_ids: Vec<RoleId>,
 }
 
@@ -19,6 +21,7 @@ impl Default for GuildSettings {
             volume: 1.0,
             max_volume: DEFAULT_MAX_VOLUME,
             idle_leave_secs: DEFAULT_IDLE_LEAVE_SECS,
+            empty_channel_leave_secs: DEFAULT_EMPTY_CHANNEL_LEAVE_SECS,
             admin_role_ids: Vec::new(),
         }
     }
@@ -43,7 +46,7 @@ impl GuildSettings {
     pub async fn get(pool: &SqlitePool, guild_id: GuildId) -> Result<Option<Self>, sqlx::Error> {
         let key = guild_id.get().to_string();
         let row = sqlx::query!(
-            "SELECT volume, max_volume, idle_leave_secs, admin_role_ids FROM guild_settings WHERE guild_id = ?",
+            "SELECT volume, max_volume, idle_leave_secs, empty_channel_leave_secs, admin_role_ids FROM guild_settings WHERE guild_id = ?",
             key
         )
         .fetch_optional(pool)
@@ -52,6 +55,7 @@ impl GuildSettings {
             volume: r.volume as f32,
             max_volume: r.max_volume as f32,
             idle_leave_secs: r.idle_leave_secs,
+            empty_channel_leave_secs: r.empty_channel_leave_secs,
             admin_role_ids: parse_admin_role_ids(&r.admin_role_ids),
         }))
     }
@@ -103,6 +107,23 @@ impl GuildSettings {
              ON CONFLICT(guild_id) DO UPDATE SET idle_leave_secs = excluded.idle_leave_secs",
             key,
             idle_leave_secs
+        )
+        .execute(pool)
+        .await
+        .map(|_| ())
+    }
+
+    pub async fn upsert_empty_channel_leave_secs(
+        pool: &SqlitePool,
+        guild_id: GuildId,
+        empty_channel_leave_secs: i64,
+    ) -> Result<(), sqlx::Error> {
+        let key = guild_id.get().to_string();
+        sqlx::query!(
+            "INSERT INTO guild_settings (guild_id, empty_channel_leave_secs) VALUES (?, ?) \
+             ON CONFLICT(guild_id) DO UPDATE SET empty_channel_leave_secs = excluded.empty_channel_leave_secs",
+            key,
+            empty_channel_leave_secs
         )
         .execute(pool)
         .await

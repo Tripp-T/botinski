@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT volume, max_volume, idle_leave_secs, admin_role_ids FROM guild_settings WHERE guild_id = ?",
+  "query": "SELECT volume, max_volume, idle_leave_secs, empty_channel_leave_secs, admin_role_ids FROM guild_settings WHERE guild_id = ?",
   "describe": {
     "columns": [
       {
@@ -19,8 +19,13 @@
         "type_info": "Integer"
       },
       {
-        "name": "admin_role_ids",
+        "name": "empty_channel_leave_secs",
         "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "admin_role_ids",
+        "ordinal": 4,
         "type_info": "Text"
       }
     ],
@@ -31,8 +36,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "f5971d3f618d8beb31fac0552d4a090f4de04afb48c9872fd14dbd657fb9a99f"
+  "hash": "6d2ced22aacae1fb72af7f13f435c4b51827f2340f85583309a37abdfe0c9303"
 }

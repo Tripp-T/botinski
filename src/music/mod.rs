@@ -264,6 +264,8 @@ async fn ensure_settings_loaded(
         guard.max_volume = settings.max_volume.clamp(0.0, MAX_VOLUME);
         guard.volume = settings.volume.clamp(0.0, guard.max_volume);
         guard.idle_leave = Duration::from_secs(settings.idle_leave_secs.max(0) as u64);
+        guard.empty_channel_leave =
+            Duration::from_secs(settings.empty_channel_leave_secs.max(0) as u64);
     }
     // First time we see this guild post-restart: rehydrate the persisted queue.
     // Both the "current" and "upcoming" entries from the prior session land in
@@ -309,6 +311,8 @@ pub async fn apply_settings(
     let mut guard = player.lock().await;
     guard.max_volume = new_settings.max_volume.clamp(0.0, MAX_VOLUME);
     guard.idle_leave = Duration::from_secs(new_settings.idle_leave_secs.max(0) as u64);
+    guard.empty_channel_leave =
+        Duration::from_secs(new_settings.empty_channel_leave_secs.max(0) as u64);
     // re-clamp volume to the (possibly lowered) cap and apply
     let clamped = guard.volume.min(guard.max_volume);
     if clamped != guard.volume {
@@ -537,23 +541,105 @@ pub async fn idle_reaper(state: AppState) -> anyhow::Result<()> {
             _ = state.shutdown_token.cancelled() => return Ok(()),
             _ = interval.tick() => {
                 for guild_id in state.music.all_guild_ids() {
-                    let Some(player) = state.music.try_get_player(guild_id) else { continue };
-                    let should_leave = {
-                        let guard = player.lock().await;
-                        let timeout = guard.idle_leave;
-                        timeout > Duration::ZERO
-                            && guard.current.is_none()
-                            && guard.queue.is_empty()
-                            && guard.idle_since.is_some_and(|t| t.elapsed() >= timeout)
-                    };
-                    if should_leave {
-                        debug!("Idle reaper: disconnecting from guild {guild_id}");
-                        if let Err(e) = leave(&state, guild_id).await {
-                            warn!("Idle reaper: failed to leave guild {guild_id}: {e}");
-                        }
+                    if let Err(e) = reap_one(&state, guild_id).await {
+                        warn!("Idle reaper: pass for guild {guild_id} failed: {e}");
                     }
                 }
             }
         }
     }
+}
+
+/// One reaper pass for a single guild. Updates listener-presence state, then
+/// disconnects if either timeout has elapsed.
+async fn reap_one(state: &Arc<AppStateInner>, guild_id: GuildId) -> anyhow::Result<()> {
+    let Some(player) = state.music.try_get_player(guild_id) else {
+        return Ok(());
+    };
+
+    // Listener count is only meaningful while we're connected. When we're not
+    // in voice we treat the channel as "has listeners" so the empty-since
+    // timer is cleared and won't fire the next time we join.
+    let connected = state.music.is_connected(guild_id);
+    let has_listeners = !connected || listener_count_in_bot_channel(state, guild_id).await > 0;
+
+    let should_leave = {
+        let mut guard = player.lock().await;
+
+        if has_listeners {
+            guard.empty_since = None;
+        } else if guard.empty_since.is_none() {
+            guard.empty_since = Some(Instant::now());
+        }
+
+        let idle_timeout = guard.idle_leave;
+        let empty_timeout = guard.empty_channel_leave;
+
+        let queue_idle = idle_timeout > Duration::ZERO
+            && guard.current.is_none()
+            && guard.queue.is_empty()
+            && guard
+                .idle_since
+                .is_some_and(|t| t.elapsed() >= idle_timeout);
+
+        let channel_empty = connected
+            && empty_timeout > Duration::ZERO
+            && guard
+                .empty_since
+                .is_some_and(|t| t.elapsed() >= empty_timeout);
+
+        queue_idle || channel_empty
+    };
+
+    if should_leave {
+        debug!("Idle reaper: disconnecting from guild {guild_id}");
+        if let Err(e) = leave(state, guild_id).await {
+            warn!("Idle reaper: failed to leave guild {guild_id}: {e}");
+        }
+    }
+    Ok(())
+}
+
+/// Count humans (non-bot, non-self) in the bot's current voice channel.
+/// Returns 0 if anything's missing (bot not in voice, guild not in cache,
+/// etc.) so the caller treats those cases as "nobody listening".
+async fn listener_count_in_bot_channel(state: &Arc<AppStateInner>, guild_id: GuildId) -> usize {
+    let Some(call) = state.music.songbird().get(guild_id) else {
+        return 0;
+    };
+    let bot_channel_id = call.lock().await.current_channel();
+    let Some(bot_channel_id) = bot_channel_id else {
+        return 0;
+    };
+    let Ok(http_cache) = state.discord_http() else {
+        return 0;
+    };
+    let bot_user_id = http_cache.cache.current_user().id;
+
+    http_cache
+        .cache
+        .guild(guild_id)
+        .map(|g| {
+            g.voice_states
+                .iter()
+                .filter(|(uid, vs)| {
+                    // Same channel as the bot.
+                    vs.channel_id.is_some_and(|c| c.get() == bot_channel_id.0.get())
+                        // Not the bot itself.
+                        && **uid != bot_user_id
+                        // Not another bot. Member is sometimes inline on the VoiceState;
+                        // fall back to the guild member cache for the bot flag.
+                        && {
+                            let is_bot_user = vs
+                                .member
+                                .as_ref()
+                                .map(|m| m.user.bot)
+                                .or_else(|| g.members.get(uid).map(|m| m.user.bot))
+                                .unwrap_or(false);
+                            !is_bot_user
+                        }
+                })
+                .count()
+        })
+        .unwrap_or(0)
 }

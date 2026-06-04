@@ -40,6 +40,7 @@ pub(super) async fn page_guild_settings(
         .unwrap_or_default();
     let max_volume_pct = (settings.max_volume * 100.0).round() as i32;
     let idle_secs = settings.idle_leave_secs;
+    let empty_secs = settings.empty_channel_leave_secs;
 
     // Pull all guild roles (sans @everyone) for the admin-role picker.
     let mut all_roles: Vec<(RoleId, String, i64)> = http_cache
@@ -87,7 +88,7 @@ pub(super) async fn page_guild_settings(
                     }
                 }
 
-                // Idle leave timeout
+                // Idle leave timeout (queue empty)
                 div class="space-y-1" {
                     label class="block text-sm font-medium text-gray-200" for="idle_leave_secs"
                         { "Idle leave timeout" }
@@ -99,6 +100,23 @@ pub(super) async fn page_guild_settings(
                             name="idle_leave_secs"
                             min="0" max="3600" step="1"
                             value=(idle_secs)
+                            class="w-24 px-2 py-1 bg-gray-950/60 border border-gray-700 rounded-md text-sm text-gray-100 focus:outline-none focus:border-blue-500";
+                        span class="text-sm text-gray-400" { "seconds" }
+                    }
+                }
+
+                // Empty channel leave timeout (no listeners)
+                div class="space-y-1" {
+                    label class="block text-sm font-medium text-gray-200" for="empty_channel_leave_secs"
+                        { "Empty channel leave timeout" }
+                    div class="text-xs text-gray-500" {
+                        "Seconds the bot will stay in a voice channel with no other humans before disconnecting. 0 disables this check. Range 0–3600."
+                    }
+                    div class="flex items-center gap-3 mt-1" {
+                        input id="empty_channel_leave_secs" type="number"
+                            name="empty_channel_leave_secs"
+                            min="0" max="3600" step="1"
+                            value=(empty_secs)
                             class="w-24 px-2 py-1 bg-gray-950/60 border border-gray-700 rounded-md text-sm text-gray-100 focus:outline-none focus:border-blue-500";
                         span class="text-sm text-gray-400" { "seconds" }
                     }

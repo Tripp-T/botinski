@@ -23,6 +23,7 @@ pub fn settings_router() -> Router<AppState> {
 pub struct SettingsForm {
     pub max_volume_percent: f32,
     pub idle_leave_secs: i64,
+    pub empty_channel_leave_secs: i64,
     #[serde(default)]
     pub admin_role_ids: Vec<String>,
 }
@@ -44,6 +45,7 @@ async fn action_update_settings(
 
     let max_volume = (form.max_volume_percent / 100.0).clamp(0.0, music::MAX_VOLUME);
     let idle_leave_secs = form.idle_leave_secs.clamp(0, 3600);
+    let empty_channel_leave_secs = form.empty_channel_leave_secs.clamp(0, 3600);
     let admin_role_ids: Vec<RoleId> = form
         .admin_role_ids
         .iter()
@@ -57,6 +59,9 @@ async fn action_update_settings(
     GuildSettings::upsert_idle_leave_secs(&state.db, guild_id, idle_leave_secs)
         .await
         .context("Failed to persist idle leave timeout")?;
+    GuildSettings::upsert_empty_channel_leave_secs(&state.db, guild_id, empty_channel_leave_secs)
+        .await
+        .context("Failed to persist empty channel leave timeout")?;
     GuildSettings::upsert_admin_role_ids(&state.db, guild_id, &admin_role_ids)
         .await
         .context("Failed to persist admin role ids")?;
