@@ -263,9 +263,13 @@ fn init_logging() {
 
     fmt.init();
 
-    // Log panics to tracing
+    // Log panics to tracing. Anything panicking inside this hook would recurse,
+    // so prefer falsy fallbacks over .unwrap().
     std::panic::set_hook(Box::new(|panic_info| {
-        let location = panic_info.location().unwrap();
+        let (file, line) = panic_info
+            .location()
+            .map(|l| (l.file(), l.line()))
+            .unwrap_or(("<unknown>", 0));
         let msg = match panic_info.payload().downcast_ref::<&'static str>() {
             Some(s) => *s,
             None => match panic_info.payload().downcast_ref::<String>() {
@@ -275,8 +279,8 @@ fn init_logging() {
         };
         tracing::error!(
             target: "panic",
-            file = location.file(),
-            line = location.line(),
+            file = file,
+            line = line,
             "thread '{}' panicked at '{}'",
             std::thread::current().name().unwrap_or("<unnamed>"),
             msg

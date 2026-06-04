@@ -2,9 +2,9 @@ use axum::{RequestPartsExt, extract::FromRequestParts};
 use poise::serenity_prelude::{Cache, GuildId, Member, Permissions, RoleId};
 use tracing::warn;
 
+use parking_lot::RwLock;
 use std::{
     collections::HashMap,
-    sync::RwLock,
     time::{Duration, Instant},
 };
 use uuid::Uuid;
@@ -43,26 +43,23 @@ impl RoleCache {
     }
 
     pub fn get(&self, user_id: Uuid) -> Option<AppUserRole> {
-        let guard = self.inner.read().unwrap();
+        let guard = self.inner.read();
         let (role, cached_at) = guard.get(&user_id)?;
         (cached_at.elapsed() < self.ttl).then(|| role.clone())
     }
 
     pub fn put(&self, user_id: Uuid, role: AppUserRole) {
-        self.inner
-            .write()
-            .unwrap()
-            .insert(user_id, (role, Instant::now()));
+        self.inner.write().insert(user_id, (role, Instant::now()));
     }
 
     pub fn invalidate(&self, user_id: Uuid) {
-        self.inner.write().unwrap().remove(&user_id);
+        self.inner.write().remove(&user_id);
     }
 
     /// Drops entries older than the cache's TTL. Intended for a periodic
     /// background sweep so dormant users don't permanently occupy memory.
     pub fn sweep(&self) -> usize {
-        let mut guard = self.inner.write().unwrap();
+        let mut guard = self.inner.write();
         let before = guard.len();
         guard.retain(|_, (_, cached_at)| cached_at.elapsed() < self.ttl);
         before - guard.len()

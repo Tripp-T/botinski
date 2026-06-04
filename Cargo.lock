@@ -369,6 +369,7 @@ dependencies = [
  "futures",
  "maud",
  "oauth2",
+ "parking_lot 0.12.5",
  "poise",
  "rand 0.10.1",
  "reqwest",
