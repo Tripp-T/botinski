@@ -2,11 +2,66 @@ use axum::{RequestPartsExt, extract::FromRequestParts};
 use poise::serenity_prelude::{Cache, GuildId, Member, Permissions, RoleId};
 use tracing::warn;
 
+use std::{
+    collections::HashMap,
+    sync::RwLock,
+    time::{Duration, Instant},
+};
+use uuid::Uuid;
+
 use crate::{
     AppState,
     http::HttpError,
     models::{guild_settings::GuildSettings, user::AppUser},
 };
+
+/// How long a computed `AppUserRole` is reused without re-running the Discord
+/// API + DB classification. Tradeoff: any role change (admin role added/removed,
+/// guild joined/left) takes up to this long to surface to that user's web view.
+pub const ROLE_CACHE_TTL: Duration = Duration::from_secs(60);
+
+/// Per-user role memo to keep the `AppUserRole` extractor off Discord's API
+/// (N `get_member` calls + N DB lookups per request). Keyed by local `AppUser.id`
+/// so logout can invalidate without consulting Discord.
+pub struct RoleCache {
+    inner: RwLock<HashMap<Uuid, (AppUserRole, Instant)>>,
+}
+
+impl Default for RoleCache {
+    fn default() -> Self {
+        Self {
+            inner: RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+impl RoleCache {
+    pub fn get(&self, user_id: Uuid) -> Option<AppUserRole> {
+        let guard = self.inner.read().unwrap();
+        let (role, cached_at) = guard.get(&user_id)?;
+        (cached_at.elapsed() < ROLE_CACHE_TTL).then(|| role.clone())
+    }
+
+    pub fn put(&self, user_id: Uuid, role: AppUserRole) {
+        self.inner
+            .write()
+            .unwrap()
+            .insert(user_id, (role, Instant::now()));
+    }
+
+    pub fn invalidate(&self, user_id: Uuid) {
+        self.inner.write().unwrap().remove(&user_id);
+    }
+
+    /// Drops entries older than [`ROLE_CACHE_TTL`]. Intended for a periodic
+    /// background sweep so dormant users don't permanently occupy memory.
+    pub fn sweep(&self) -> usize {
+        let mut guard = self.inner.write().unwrap();
+        let before = guard.len();
+        guard.retain(|_, (_, cached_at)| cached_at.elapsed() < ROLE_CACHE_TTL);
+        before - guard.len()
+    }
+}
 
 #[derive(Clone, Default)]
 pub enum AppUserRole {
@@ -64,6 +119,15 @@ impl FromRequestParts<AppState> for AppUserRole {
             Err(HttpError::Unauthorized) => return Ok(Self::Anonymous),
             Err(e) => return Err(e),
         };
+
+        // Process-wide cache keyed by local user id, with a short TTL. Avoids
+        // hammering Discord's `get_member` and the guild_settings DB on every
+        // authenticated page load.
+        if let Some(role) = state.role_cache.get(user.id) {
+            parts.extensions.insert(role.clone());
+            return Ok(role);
+        }
+
         let discord_user_id = user.discord_id()?;
 
         let (admin_uids, admin_roles) = {
@@ -76,6 +140,7 @@ impl FromRequestParts<AppState> for AppUserRole {
 
         if admin_uids.contains(&discord_user_id) {
             let role = Self::GlobalAdmin;
+            state.role_cache.put(user.id, role.clone());
             parts.extensions.insert(role.clone());
             return Ok(role);
         }
@@ -125,6 +190,7 @@ impl FromRequestParts<AppState> for AppUserRole {
         } else {
             Self::Foreign
         };
+        state.role_cache.put(user.id, role.clone());
         parts.extensions.insert(role.clone());
         Ok(role)
     }

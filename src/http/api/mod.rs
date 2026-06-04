@@ -166,6 +166,7 @@ async fn oauth_logout(
     if let Err(e) = AppSession::delete_by_id(&state.db, session.id).await {
         error!("Failed to delete session: {e}");
     }
+    state.role_cache.invalidate(session.user_id);
     let private_cookies = cookies.private(&cookie_key);
     private_cookies
         .get("user-session")

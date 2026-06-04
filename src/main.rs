@@ -1,6 +1,10 @@
 use crate::{
-    config::ConfigManager, db::DBManager, discord::DiscordHttpCache, models::session::AppSession,
-    music::MusicManager, oauth::OauthManager,
+    config::ConfigManager,
+    db::DBManager,
+    discord::DiscordHttpCache,
+    models::{session::AppSession, user_role::RoleCache},
+    music::MusicManager,
+    oauth::OauthManager,
 };
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -76,6 +80,7 @@ struct AppStateInner {
     db: DBManager,
     oauth: OauthManager,
     music: MusicManager,
+    role_cache: RoleCache,
     discord_http: OnceCell<DiscordHttpCache>,
     shutdown_token: CancellationToken,
 }
@@ -86,6 +91,7 @@ impl AppStateInner {
             db: DBManager::new(opts).await?,
             oauth: OauthManager::new(opts)?,
             music: MusicManager::new(),
+            role_cache: RoleCache::default(),
             discord_http: OnceCell::new(),
             shutdown_token: CancellationToken::new(),
         })
@@ -128,6 +134,11 @@ async fn main() -> anyhow::Result<()> {
         "Discord",
     );
     wrap_thread(&mut thread_pool, session_gc(state.clone()), "SessionGC");
+    wrap_thread(
+        &mut thread_pool,
+        role_cache_sweeper(state.clone()),
+        "RoleCacheSweep",
+    );
     wrap_thread(
         &mut thread_pool,
         music::idle_reaper(state.clone()),
@@ -187,6 +198,23 @@ async fn session_gc(state: AppState) -> Result<()> {
                     Ok(0) => debug!("Session GC: no expired sessions to reap"),
                     Ok(n) => info!("Session GC: reaped {n} expired session(s)"),
                     Err(e) => error!("Session GC failed: {e}"),
+                }
+            }
+        }
+    }
+}
+
+async fn role_cache_sweeper(state: AppState) -> Result<()> {
+    use tokio::time;
+    let mut interval = time::interval(time::Duration::from_secs(300));
+    interval.tick().await; // skip the immediate first tick
+    loop {
+        tokio::select! {
+            _ = state.shutdown_token.cancelled() => return Ok(()),
+            _ = interval.tick() => {
+                let dropped = state.role_cache.sweep();
+                if dropped > 0 {
+                    debug!("RoleCache: swept {dropped} expired entries");
                 }
             }
         }
