@@ -14,7 +14,7 @@ pub(super) async fn page_index(
             div class="space-y-2 pt-4" {
                 h1 class="text-3xl font-bold tracking-tight text-gray-50" { "botinski" }
                 p class="text-sm text-gray-400" {
-                    "A modular, multi-platform bot framework written in Rust."
+                    "A Discord music bot — slash commands, per-guild settings, and a live SSE-driven web dashboard. Written in Rust."
                 }
             }
             div class="rounded-lg bg-gray-900/60 border border-gray-800 p-5 space-y-3" {

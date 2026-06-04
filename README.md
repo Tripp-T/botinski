@@ -1,6 +1,6 @@
 # botinski
 
-A modular, multi-platform bot framework written in Rust. Currently a work in progress.
+A Discord music bot — slash commands, per-guild settings, and a live SSE-driven web dashboard. Written in Rust.
 
 ## Prerequisites
 
