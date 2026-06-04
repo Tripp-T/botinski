@@ -23,7 +23,7 @@ pub use ffmpeg::FfmpegInput;
 pub use manager::MusicManager;
 pub use player::{GuildPlayer, NowPlaying};
 pub use probe::is_playlist_url;
-pub use track::{DEFAULT_VOLUME, MAX_VOLUME, Track, format_duration, format_secs};
+pub use track::{DEFAULT_VOLUME, MAX_VOLUME, NewTrack, Track, format_duration, format_secs};
 
 use anyhow::{Context as _, anyhow, bail};
 use poise::serenity_prelude::{ChannelId, GuildId, UserId};
@@ -100,14 +100,14 @@ pub async fn enqueue_playlist(
             continue;
         };
         let title = entry.title.clone().unwrap_or_else(|| track_url.clone());
-        let track = Track::new(
+        let track = Track::new(NewTrack {
             title,
-            track_url.clone(),
-            entry.duration.map(Duration::from_secs_f64),
-            requester.1.clone(),
-            requester.0,
-            false,
-        );
+            url: track_url.clone(),
+            duration: entry.duration.map(Duration::from_secs_f64),
+            requested_by_name: requester.1.clone(),
+            requested_by_id: requester.0,
+            is_live: false,
+        });
 
         if guard.current.is_none() {
             let src: Input = YoutubeDl::new(manager.http_client(), track_url).into();
@@ -147,14 +147,14 @@ pub async fn enqueue(
     } else {
         info.duration.map(Duration::from_secs_f64)
     };
-    let track = Track::new(
+    let track = Track::new(NewTrack {
         title,
-        watch_url.clone(),
+        url: watch_url.clone(),
         duration,
-        requester.1,
-        requester.0,
-        info.is_live,
-    );
+        requested_by_name: requester.1,
+        requested_by_id: requester.0,
+        is_live: info.is_live,
+    });
 
     let call_lock = match manager.songbird().get(guild_id) {
         Some(call) => call,

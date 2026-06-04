@@ -21,23 +21,27 @@ pub struct Track {
     pub is_live: bool,
 }
 
+/// Caller-supplied fields for [`Track::new`]. Lets call sites read
+/// `is_live: true` instead of guessing which positional bool means what.
+pub struct NewTrack {
+    pub title: String,
+    pub url: String,
+    pub duration: Option<Duration>,
+    pub requested_by_name: String,
+    pub requested_by_id: UserId,
+    pub is_live: bool,
+}
+
 impl Track {
-    pub fn new(
-        title: String,
-        url: String,
-        duration: Option<Duration>,
-        requested_by_name: String,
-        requested_by_id: UserId,
-        is_live: bool,
-    ) -> Self {
+    pub fn new(t: NewTrack) -> Self {
         Self {
             id: Uuid::new_v4(),
-            title,
-            url,
-            duration,
-            requested_by_name,
-            requested_by_id,
-            is_live,
+            title: t.title,
+            url: t.url,
+            duration: t.duration,
+            requested_by_name: t.requested_by_name,
+            requested_by_id: t.requested_by_id,
+            is_live: t.is_live,
         }
     }
 }
@@ -91,22 +95,16 @@ mod tests {
 
     #[test]
     fn track_new_assigns_unique_ids() {
-        let a = Track::new(
-            "a".into(),
-            "u".into(),
-            None,
-            "r".into(),
-            poise::serenity_prelude::UserId::new(1),
-            false,
-        );
-        let b = Track::new(
-            "a".into(),
-            "u".into(),
-            None,
-            "r".into(),
-            poise::serenity_prelude::UserId::new(1),
-            false,
-        );
-        assert_ne!(a.id, b.id);
+        let make = || {
+            Track::new(NewTrack {
+                title: "a".into(),
+                url: "u".into(),
+                duration: None,
+                requested_by_name: "r".into(),
+                requested_by_id: poise::serenity_prelude::UserId::new(1),
+                is_live: false,
+            })
+        };
+        assert_ne!(make().id, make().id);
     }
 }

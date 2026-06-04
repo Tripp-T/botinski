@@ -11,8 +11,9 @@ use std::{
     task::{Context as TaskContext, Poll},
 };
 use symphonia::core::io::MediaSource;
-use tokio::io::{AsyncRead, ReadBuf};
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader, ReadBuf};
 use tokio::process::{Child, ChildStdout};
+use tracing::warn;
 
 pub struct FfmpegInput {
     url: String,
@@ -60,7 +61,7 @@ impl Compose for FfmpegInput {
             .kill_on_drop(true)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .args([
                 "-loglevel",
                 "error",
@@ -77,6 +78,19 @@ impl Compose for FfmpegInput {
             ])
             .spawn()
             .map_err(|e| AudioStreamError::Fail(Box::new(e)))?;
+
+        // Drain ffmpeg's stderr so failures (bad URL, unsupported codec, etc.)
+        // surface in logs instead of disappearing into the void.
+        // `-loglevel error` means anything we see here is genuinely an error.
+        if let Some(stderr) = child.stderr.take() {
+            let url = self.url.clone();
+            tokio::spawn(async move {
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    warn!("ffmpeg [{url}]: {line}");
+                }
+            });
+        }
 
         let stdout = child.stdout.take().ok_or_else(|| {
             AudioStreamError::Fail(std::io::Error::other("ffmpeg stdout missing").into())

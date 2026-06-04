@@ -73,6 +73,7 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
             event_handler: |ctx, event, framework, data| {
                 Box::pin(event_handler(ctx, event, framework, data))
             },
+            on_error: |error| Box::pin(on_framework_error(error)),
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
@@ -185,8 +186,22 @@ async fn is_admin(ctx: Context<'_>) -> Result<bool, Error> {
         }
     }
 
-    ctx.reply("Permission denied")
-        .await
-        .context("Failed to reply")?;
     Ok(false)
+}
+
+/// Framework error hook. Owns the "permission denied" reply that used to live
+/// inside `is_admin`, so the predicate stays pure and double-replies can't
+/// happen if poise ever changes its default rejection behaviour.
+async fn on_framework_error(error: poise::FrameworkError<'_, AppState, Error>) {
+    use poise::FrameworkError::*;
+    match error {
+        CommandCheckFailed { ctx, .. } => {
+            let _ = ctx.reply("Permission denied").await;
+        }
+        other => {
+            if let Err(e) = poise::builtins::on_error(other).await {
+                tracing::error!("Error handler itself failed: {e}");
+            }
+        }
+    }
 }
