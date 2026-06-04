@@ -7,14 +7,22 @@ use crate::{
     },
 };
 use axum::{
-    RequestPartsExt, debug_middleware,
+    RequestPartsExt, body, debug_middleware,
     extract::{Request, State},
-    http::Method,
+    http::{Method, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use std::time::Instant;
 use tracing::{Instrument, debug, error, info_span, warn};
+
+/// Hard cap on how many bytes we'll read from a request body to log. Forms
+/// fit comfortably; this protects against an over-large POST eating memory
+/// just so we can record it.
+const AUDIT_BODY_LIMIT: usize = 2048;
+/// Cap on the textual detail we persist into the audit_log table. Bodies are
+/// truncated with an ellipsis past this length.
+const AUDIT_DETAIL_MAX: usize = 500;
 
 #[debug_middleware]
 pub async fn middleware_error_formatting(
@@ -60,14 +68,33 @@ pub async fn middleware_audit_log(
     }
 
     let path = req.uri().path().to_string();
-    let (mut parts, body) = req.into_parts();
-    // Best-effort actor identification. If extraction fails (no session, etc.)
-    // we record the action as anonymous.
+    let (mut parts, original_body) = req.into_parts();
+
+    // Pull the body into memory so we can log it AND still hand it to the
+    // handler. Size-capped so a hostile client can't make us buffer huge
+    // requests. Past the cap we 413 the request rather than guess.
+    let body_bytes = match body::to_bytes(original_body, AUDIT_BODY_LIMIT).await {
+        Ok(b) => b,
+        Err(e) => {
+            warn!("audit log: body exceeded {AUDIT_BODY_LIMIT} bytes or failed to read: {e}");
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "request body too large to audit",
+            )
+                .into_response();
+        }
+    };
+
+    // Best-effort actor identification. If extraction fails (no session,
+    // missing cookie key, etc.) we record the action as anonymous.
     let actor = parts
         .extract_with_state::<AppUser, AppState>(&state)
         .await
         .ok();
-    let req = Request::from_parts(parts, body);
+
+    // Rebuild the request with a fresh Body backed by the same bytes so the
+    // handler can read it.
+    let req = Request::from_parts(parts, axum::body::Body::from(body_bytes.clone()));
 
     let response = next.run(req).await;
     let status = response.status();
@@ -79,13 +106,24 @@ pub async fn middleware_audit_log(
         .and_then(|u| u.discord_id().ok().map(|id| id.get().to_string()));
     let actor_name = actor.as_ref().map(|u| u.name.clone());
 
+    // Truncate the body text for storage. Form data fits well under the
+    // limit; multi-KB payloads are typically uninteresting for audit.
+    let body_text = String::from_utf8_lossy(&body_bytes);
+    let detail = if body_text.is_empty() {
+        None
+    } else if body_text.len() > AUDIT_DETAIL_MAX {
+        Some(format!("{}…", &body_text[..AUDIT_DETAIL_MAX]))
+    } else {
+        Some(body_text.into_owned())
+    };
+
     let entry = NewAuditLogEntry {
         source: "web",
         actor_id: actor_id.as_deref(),
         actor_name: actor_name.as_deref(),
         guild_id: None,
         action: &action,
-        detail: None,
+        detail: detail.as_deref(),
         outcome: &outcome,
     };
     if let Err(e) = AuditLogEntry::insert(&state.db, entry).await {
