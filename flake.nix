@@ -3,6 +3,10 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
     crane.url = "github:ipetkov/crane";
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
   outputs =
@@ -162,6 +166,44 @@
               inherit (p) cargoArtifacts;
             }
           );
+          # RustSec CVE scan against the dep tree.
+          #
+          # cargo-audit 0.22+ no longer reads `audit.toml`, so each ignored
+          # advisory has to be passed as a CLI flag here. Every entry needs a
+          # justification — where the dep enters our tree, why we can't fix it
+          # directly, what would unblock removing the ignore.
+          audit = p.craneLib.cargoAudit {
+            inherit (p) src;
+            advisory-db = inputs.advisory-db;
+            cargoAuditExtraArgs = builtins.concatStringsSep " " [
+              "--ignore yanked"
+
+              # libcrux-chacha20poly1305 0.0.7 — high-severity panic on overlong
+              # ciphertext buffer. Pulled via songbird → davey → openmls →
+              # hpke-rs-libcrux. Songbird 0.6.0 has not yet shipped a release
+              # bumping davey to a version using libcrux ≥ 0.0.8. We don't use
+              # openmls directly. Resolves when songbird publishes > 0.6.0.
+              "--ignore RUSTSEC-2026-0124"
+
+              # rsa 0.9.10 — Marvin Attack timing sidechannel. The advisory says
+              # "No fixed upgrade is available". Pulled transitively via
+              # sqlx-macros-core, which depends on sqlx-mysql for compile-time
+              # query validation even though we only use the SQLite backend.
+              # Resolves when the rsa crate ships a fix or sqlx makes backend
+              # deps in macros-core optional.
+              "--ignore RUSTSEC-2023-0071"
+
+              # rustls-webpki 0.102.8 — four advisories all on the same pinned
+              # version. Reached via serenity 0.12 → tokio-tungstenite 0.21 →
+              # rustls 0.22. Our other rustls path (oauth2/reqwest) is already
+              # on rustls-webpki 0.103.13 (fixed). Resolves when serenity or
+              # poise bumps tokio-tungstenite past 0.21.
+              "--ignore RUSTSEC-2026-0104" # reachable panic in CRL parsing
+              "--ignore RUSTSEC-2026-0049" # CRLs not considered authoritative
+              "--ignore RUSTSEC-2026-0098" # URI name constraints accepted
+              "--ignore RUSTSEC-2026-0099" # wildcard name constraints accepted
+            ];
+          };
           # Verifies the committed .sqlx/ cache matches the queries in the source.
           # Builds a throwaway sqlite in the sandbox, runs migrations, then has
           # sqlx-cli re-derive the metadata and diff it against .sqlx/.
