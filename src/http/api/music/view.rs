@@ -1,64 +1,13 @@
-use crate::{
-    AppState,
-    http::HttpError,
-    models::{user::AppUser, user_role::AppUserRole},
-    music,
-};
-use anyhow::Context as _;
-use axum::{
-    Form, Router, debug_handler,
-    extract::{Path, State},
-    response::{
-        Html, IntoResponse,
-        sse::{Event, KeepAlive, Sse},
-    },
-    routing::{get, post},
-};
-use futures::Stream;
+//! Pure markup helpers for the music page: icons, buttons, and the
+//! `render_state` / `render_progress` functions that produce the HTML the
+//! action handlers and SSE stream both swap in.
+
+use crate::music;
 use maud::{Markup, html};
 use poise::serenity_prelude::GuildId;
-use serde::Deserialize;
-use std::{collections::HashSet, convert::Infallible, time::Duration};
-use tokio::sync::broadcast::error::RecvError;
-use uuid::Uuid;
+use std::time::Duration;
 
-pub fn music_router() -> Router<AppState> {
-    Router::new()
-        .route("/guilds/{guild_id}/music/state", get(state_partial))
-        .route("/guilds/{guild_id}/music/events", get(music_events_sse))
-        .route("/guilds/{guild_id}/music/play", post(action_play))
-        .route("/guilds/{guild_id}/music/pause", post(action_pause))
-        .route("/guilds/{guild_id}/music/resume", post(action_resume))
-        .route("/guilds/{guild_id}/music/skip", post(action_skip))
-        .route("/guilds/{guild_id}/music/clear", post(action_clear))
-        .route("/guilds/{guild_id}/music/leave", post(action_leave))
-        .route("/guilds/{guild_id}/music/remove", post(action_remove))
-        .route("/guilds/{guild_id}/music/move-up", post(action_move_up))
-        .route("/guilds/{guild_id}/music/move-down", post(action_move_down))
-        .route("/guilds/{guild_id}/music/volume", post(action_volume))
-}
-
-fn require_member(role: &AppUserRole, guild_id: GuildId) -> Result<bool, HttpError> {
-    if !role.is_authenticated() {
-        return Err(HttpError::Unauthorized);
-    }
-    if !role.is_member_of(guild_id) {
-        return Err(HttpError::Forbidden);
-    }
-    Ok(role.is_admin_of(guild_id))
-}
-
-fn require_admin(role: &AppUserRole, guild_id: GuildId) -> Result<(), HttpError> {
-    if !role.is_authenticated() {
-        return Err(HttpError::Unauthorized);
-    }
-    if !role.is_admin_of(guild_id) {
-        return Err(HttpError::Forbidden);
-    }
-    Ok(())
-}
-
-fn btn_secondary(icon: Markup, label: &str, action_post: String) -> Markup {
+pub(super) fn btn_secondary(icon: Markup, label: &str, action_post: String) -> Markup {
     html! {
         button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gray-700/60 hover:bg-gray-600 text-gray-100 text-sm font-medium transition-colors cursor-pointer"
             hx-post=(action_post)
@@ -67,7 +16,7 @@ fn btn_secondary(icon: Markup, label: &str, action_post: String) -> Markup {
     }
 }
 
-fn btn_primary(icon: Markup, label: &str, action_post: String) -> Markup {
+pub(super) fn btn_primary(icon: Markup, label: &str, action_post: String) -> Markup {
     html! {
         button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors cursor-pointer"
             hx-post=(action_post)
@@ -76,7 +25,7 @@ fn btn_primary(icon: Markup, label: &str, action_post: String) -> Markup {
     }
 }
 
-fn btn_danger(icon: Markup, label: &str, action_post: String) -> Markup {
+pub(super) fn btn_danger(icon: Markup, label: &str, action_post: String) -> Markup {
     html! {
         button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600/80 hover:bg-red-500 text-white text-sm font-medium transition-colors cursor-pointer"
             hx-post=(action_post)
@@ -85,7 +34,7 @@ fn btn_danger(icon: Markup, label: &str, action_post: String) -> Markup {
     }
 }
 
-fn icon_pause() -> Markup {
+pub(super) fn icon_pause() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="currentColor" class="w-4 h-4 shrink-0" {
@@ -95,7 +44,7 @@ fn icon_pause() -> Markup {
     }
 }
 
-fn icon_play() -> Markup {
+pub(super) fn icon_play() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="currentColor" class="w-4 h-4 shrink-0" {
@@ -104,7 +53,7 @@ fn icon_play() -> Markup {
     }
 }
 
-fn icon_skip() -> Markup {
+pub(super) fn icon_skip() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="currentColor" class="w-4 h-4 shrink-0" {
@@ -114,7 +63,7 @@ fn icon_skip() -> Markup {
     }
 }
 
-fn icon_trash() -> Markup {
+pub(super) fn icon_trash() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="none" stroke="currentColor" stroke-width="2"
@@ -127,7 +76,7 @@ fn icon_trash() -> Markup {
     }
 }
 
-fn icon_power() -> Markup {
+pub(super) fn icon_power() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="none" stroke="currentColor" stroke-width="2"
@@ -139,7 +88,7 @@ fn icon_power() -> Markup {
     }
 }
 
-fn icon_arrow_up() -> Markup {
+pub(super) fn icon_arrow_up() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="none" stroke="currentColor" stroke-width="2"
@@ -151,7 +100,7 @@ fn icon_arrow_up() -> Markup {
     }
 }
 
-fn icon_arrow_down() -> Markup {
+pub(super) fn icon_arrow_down() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="none" stroke="currentColor" stroke-width="2"
@@ -163,7 +112,7 @@ fn icon_arrow_down() -> Markup {
     }
 }
 
-fn icon_x() -> Markup {
+pub(super) fn icon_x() -> Markup {
     html! {
         svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
             fill="none" stroke="currentColor" stroke-width="2"
@@ -175,7 +124,7 @@ fn icon_x() -> Markup {
     }
 }
 
-pub fn render_progress(position: Option<Duration>, total: Option<Duration>) -> Markup {
+pub(super) fn render_progress(position: Option<Duration>, total: Option<Duration>) -> Markup {
     match (position, total) {
         (Some(pos), Some(total)) => {
             let pct = if total.as_secs_f64() > 0.0 {
@@ -202,13 +151,13 @@ pub fn render_progress(position: Option<Duration>, total: Option<Duration>) -> M
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum PlaybackStatus {
+pub(super) enum PlaybackStatus {
     Playing,
     Paused,
     None,
 }
 
-pub struct MusicView<'a> {
+pub(super) struct MusicView<'a> {
     pub guild_id: GuildId,
     pub is_admin: bool,
     pub connected: bool,
@@ -219,7 +168,7 @@ pub struct MusicView<'a> {
     pub status: PlaybackStatus,
 }
 
-pub fn render_state(view: MusicView<'_>) -> Markup {
+pub(super) fn render_state(view: MusicView<'_>) -> Markup {
     let MusicView {
         guild_id,
         is_admin,
@@ -364,290 +313,4 @@ pub fn render_state(view: MusicView<'_>) -> Markup {
             }
         }
     }
-}
-
-async fn render_state_for(
-    state: &AppState,
-    guild_id: GuildId,
-    is_admin: bool,
-) -> Result<Html<Markup>, HttpError> {
-    let connected = state.music.is_connected(guild_id);
-    let player = state.music.try_get_player(guild_id);
-    let (current, current_position, queue, volume, status) = match player {
-        Some(p) => {
-            let guard = p.lock().await;
-            let (pos, status) = if let Some(np) = &guard.current {
-                match np.handle.get_info().await {
-                    Ok(s) => {
-                        let st = match s.playing {
-                            songbird::tracks::PlayMode::Play => PlaybackStatus::Playing,
-                            songbird::tracks::PlayMode::Pause => PlaybackStatus::Paused,
-                            _ => PlaybackStatus::None,
-                        };
-                        (Some(s.position), st)
-                    }
-                    Err(_) => (None, PlaybackStatus::None),
-                }
-            } else {
-                (None, PlaybackStatus::None)
-            };
-            (
-                guard.current.as_ref().map(|np| np.track.clone()),
-                pos,
-                guard.queue.iter().cloned().collect::<Vec<_>>(),
-                guard.volume,
-                status,
-            )
-        }
-        None => {
-            let vol = crate::models::guild_settings::GuildSettings::get(&state.db, guild_id)
-                .await
-                .ok()
-                .flatten()
-                .map(|s| s.volume.clamp(0.0, music::MAX_VOLUME))
-                .unwrap_or(music::DEFAULT_VOLUME);
-            (None, None, Vec::new(), vol, PlaybackStatus::None)
-        }
-    };
-    Ok(Html(render_state(MusicView {
-        guild_id,
-        is_admin,
-        connected,
-        current: current.as_ref(),
-        current_position,
-        queue: &queue,
-        volume,
-        status,
-    })))
-}
-
-#[debug_handler]
-async fn state_partial(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    let is_admin = require_member(&role, guild_id)?;
-    render_state_for(&state, guild_id, is_admin).await
-}
-
-async fn render_progress_html(state: &AppState, guild_id: GuildId) -> String {
-    let Some(player) = state.music.try_get_player(guild_id) else {
-        return String::new();
-    };
-    let guard = player.lock().await;
-    let (position, duration) = if let Some(np) = &guard.current {
-        let pos = np.handle.get_info().await.ok().map(|s| s.position);
-        (pos, np.track.duration)
-    } else {
-        (None, None)
-    };
-    render_progress(position, duration).into_string()
-}
-
-async fn render_state_html(state: &AppState, guild_id: GuildId, is_admin: bool) -> String {
-    match render_state_for(state, guild_id, is_admin).await {
-        Ok(Html(markup)) => markup.into_string(),
-        Err(_) => String::new(),
-    }
-}
-
-async fn music_events_sse(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    let is_admin = require_member(&role, guild_id)?;
-    let mut events = state.music.subscribe(guild_id);
-
-    let stream = async_stream::stream! {
-        // Initial full state on connect
-        let html = render_state_html(&state, guild_id, is_admin).await;
-        yield Ok(Event::default().event("state").data(html));
-
-        let mut ticker = tokio::time::interval(Duration::from_secs(1));
-        ticker.tick().await; // consume the immediate tick
-
-        loop {
-            tokio::select! {
-                _ = state.shutdown_token.cancelled() => return,
-                ev = events.recv() => {
-                    match ev {
-                        Ok(()) | Err(RecvError::Lagged(_)) => {
-                            let html = render_state_html(&state, guild_id, is_admin).await;
-                            yield Ok(Event::default().event("state").data(html));
-                        }
-                        Err(RecvError::Closed) => return,
-                    }
-                }
-                _ = ticker.tick() => {
-                    let html = render_progress_html(&state, guild_id).await;
-                    yield Ok(Event::default().event("progress").data(html));
-                }
-            }
-        }
-    };
-
-    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
-}
-
-#[derive(Deserialize)]
-struct PlayForm {
-    query: String,
-}
-
-#[derive(Deserialize)]
-struct IdsForm {
-    #[serde(default)]
-    ids: String,
-}
-
-fn parse_ids(form: &IdsForm) -> HashSet<Uuid> {
-    form.ids
-        .split(',')
-        .filter_map(|s| Uuid::parse_str(s.trim()).ok())
-        .collect()
-}
-
-#[debug_handler]
-async fn action_play(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    user: AppUser,
-    Path(guild_id): Path<u64>,
-    Form(form): Form<PlayForm>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    let is_admin = require_member(&role, guild_id)?;
-    let user_id = user.discord_id()?;
-    let requester = (user_id, user.name.clone());
-    if music::is_playlist_url(&form.query) {
-        music::enqueue_playlist(&state, guild_id, None, form.query, requester)
-            .await
-            .context("Failed to enqueue playlist")?;
-    } else {
-        music::enqueue(&state, guild_id, None, form.query, requester)
-            .await
-            .context("Failed to enqueue track")?;
-    }
-    render_state_for(&state, guild_id, is_admin).await
-}
-
-#[debug_handler]
-async fn action_pause(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    let is_admin = require_member(&role, guild_id)?;
-    music::pause(&state, guild_id).await?;
-    render_state_for(&state, guild_id, is_admin).await
-}
-
-#[debug_handler]
-async fn action_resume(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    let is_admin = require_member(&role, guild_id)?;
-    music::resume(&state, guild_id).await?;
-    render_state_for(&state, guild_id, is_admin).await
-}
-
-#[debug_handler]
-async fn action_skip(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    require_admin(&role, guild_id)?;
-    music::skip(&state, guild_id).await?;
-    render_state_for(&state, guild_id, true).await
-}
-
-#[debug_handler]
-async fn action_clear(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    require_admin(&role, guild_id)?;
-    music::clear(&state, guild_id).await?;
-    render_state_for(&state, guild_id, true).await
-}
-
-#[debug_handler]
-async fn action_leave(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    require_admin(&role, guild_id)?;
-    music::leave(&state, guild_id).await?;
-    render_state_for(&state, guild_id, true).await
-}
-
-#[debug_handler]
-async fn action_remove(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-    Form(form): Form<IdsForm>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    require_admin(&role, guild_id)?;
-    music::remove_tracks(&state, guild_id, &parse_ids(&form)).await?;
-    render_state_for(&state, guild_id, true).await
-}
-
-#[debug_handler]
-async fn action_move_up(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-    Form(form): Form<IdsForm>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    require_admin(&role, guild_id)?;
-    music::move_tracks_up(&state, guild_id, &parse_ids(&form)).await?;
-    render_state_for(&state, guild_id, true).await
-}
-
-#[debug_handler]
-async fn action_move_down(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-    Form(form): Form<IdsForm>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    require_admin(&role, guild_id)?;
-    music::move_tracks_down(&state, guild_id, &parse_ids(&form)).await?;
-    render_state_for(&state, guild_id, true).await
-}
-
-#[derive(Deserialize)]
-struct VolumeForm {
-    percent: f32,
-}
-
-#[debug_handler]
-async fn action_volume(
-    State(state): State<AppState>,
-    role: AppUserRole,
-    Path(guild_id): Path<u64>,
-    Form(form): Form<VolumeForm>,
-) -> Result<impl IntoResponse, HttpError> {
-    let guild_id = GuildId::new(guild_id);
-    require_admin(&role, guild_id)?;
-    music::set_volume(&state, guild_id, form.percent / 100.0).await?;
-    render_state_for(&state, guild_id, true).await
 }
