@@ -83,8 +83,6 @@ jobs:
           SOURCE_IMAGE="botinski:latest"
 
           docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE:latest"
-          docker tag "$SOURCE_IMAGE" "$TARGET_IMAGE:${{ github.sha }}"
 
-          echo "Pushing $TARGET_IMAGE:latest and $TARGET_IMAGE:${{ github.sha }}"
+          echo "Pushing $TARGET_IMAGE:latest"
           docker push "$TARGET_IMAGE:latest"
-          docker push "$TARGET_IMAGE:${{ github.sha }}"
