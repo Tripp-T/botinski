@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS guild_queue (
+  guild_id TEXT PRIMARY KEY NOT NULL,
+  tracks TEXT NOT NULL DEFAULT '[]'
+);

@@ -40,7 +40,10 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 
-use crate::{AppState, AppStateInner, models::guild_settings::GuildSettings};
+use crate::{
+    AppState, AppStateInner,
+    models::{guild_queue, guild_settings::GuildSettings},
+};
 use probe::{YtdlpInfo, dump_playlist, playlist_entry_url, probe_track};
 
 fn build_input(
@@ -57,6 +60,28 @@ fn build_input(
     } else {
         Ok(YoutubeDl::new(client, watch_url.to_string()).into())
     }
+}
+
+/// Build an Input for a previously-stored Track. Live tracks need a fresh
+/// manifest URL on every play (yt-dlp manifests expire); on failure we fall
+/// back to the lazy YoutubeDl path.
+async fn build_input_for_track(client: reqwest::Client, track: &Track) -> Input {
+    if track.is_live {
+        match probe_track(&track.url).await {
+            Ok(info) => match build_input(client.clone(), &info, &track.url) {
+                Ok(input) => return input,
+                Err(e) => warn!(
+                    "Failed to build live input for {}: {e}; falling back to YoutubeDl",
+                    track.url
+                ),
+            },
+            Err(e) => warn!(
+                "Failed to refresh live stream for {}: {e}; falling back to YoutubeDl",
+                track.url
+            ),
+        }
+    }
+    YoutubeDl::new(client, track.url.clone()).into()
 }
 
 pub struct PlaylistResult {
@@ -120,6 +145,7 @@ pub async fn enqueue_playlist(
 
     drop(guard);
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     Ok(PlaylistResult {
         title: playlist.title,
         added,
@@ -173,12 +199,28 @@ pub async fn enqueue(
     let mut guard = player.lock().await;
     if guard.current.is_some() {
         guard.queue.push_back(track.clone());
+    } else if let Some(restored_head) = guard.queue.pop_front() {
+        // Queue has restored items from a prior session. Resume them in
+        // order; the user's new track goes to the back so we preserve the
+        // original ordering they built up before the restart.
+        let head_input = build_input_for_track(manager.http_client(), &restored_head).await;
+        start_playback(
+            state,
+            guild_id,
+            call_lock,
+            &mut guard,
+            head_input,
+            restored_head,
+        )
+        .await?;
+        guard.queue.push_back(track.clone());
     } else {
         let input = build_input(manager.http_client(), &info, &watch_url)?;
         start_playback(state, guild_id, call_lock, &mut guard, input, track.clone()).await?;
     }
     drop(guard);
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     Ok(track)
 }
 
@@ -223,8 +265,39 @@ async fn ensure_settings_loaded(
         guard.volume = settings.volume.clamp(0.0, guard.max_volume);
         guard.idle_leave = Duration::from_secs(settings.idle_leave_secs.max(0) as u64);
     }
+    // First time we see this guild post-restart: rehydrate the persisted queue.
+    // Both the "current" and "upcoming" entries from the prior session land in
+    // `queue`; the next /play will pop the head and start it playing.
+    match guild_queue::load(&state.db, guild_id).await {
+        Ok(tracks) => {
+            for t in tracks {
+                guard.queue.push_back(t);
+            }
+        }
+        Err(e) => warn!("Failed to load persisted queue for {guild_id}: {e}"),
+    }
     guard.settings_loaded = true;
     Ok(())
+}
+
+/// Snapshot the player's current+queue and write it to the persistence table.
+/// Called from every mutator that changes queue/current. Failures are logged
+/// but never propagate — losing a queue snapshot shouldn't fail the request.
+async fn persist_queue(state: &Arc<AppStateInner>, guild_id: GuildId) {
+    let snapshot: Vec<Track> = {
+        let player = state.music.player(guild_id);
+        let guard = player.lock().await;
+        guard
+            .current
+            .as_ref()
+            .map(|np| np.track.clone())
+            .into_iter()
+            .chain(guard.queue.iter().cloned())
+            .collect()
+    };
+    if let Err(e) = guild_queue::save(&state.db, guild_id, &snapshot).await {
+        warn!("Failed to persist queue for {guild_id}: {e}");
+    }
 }
 
 pub async fn apply_settings(
@@ -304,20 +377,7 @@ async fn advance_queue(state: &Arc<AppStateInner>, guild_id: GuildId) -> anyhow:
             .songbird()
             .get(guild_id)
             .context("No active call when advancing queue")?;
-        let input: Input = if next.is_live {
-            match probe_track(&next.url).await {
-                Ok(info) => build_input(manager.http_client(), &info, &next.url)?,
-                Err(e) => {
-                    warn!(
-                        "Failed to refresh live stream for {}: {e}; falling back to YoutubeDl",
-                        next.url
-                    );
-                    YoutubeDl::new(manager.http_client(), next.url.clone()).into()
-                }
-            }
-        } else {
-            YoutubeDl::new(manager.http_client(), next.url.clone()).into()
-        };
+        let input = build_input_for_track(manager.http_client(), &next).await;
         start_playback(state, guild_id, call_lock, &mut guard, input, next).await
     } else {
         guard.idle_since = Some(Instant::now());
@@ -325,6 +385,7 @@ async fn advance_queue(state: &Arc<AppStateInner>, guild_id: GuildId) -> anyhow:
     };
     drop(guard);
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     result
 }
 
@@ -338,6 +399,8 @@ pub async fn skip(state: &Arc<AppStateInner>, guild_id: GuildId) -> anyhow::Resu
     }
     drop(guard);
     state.music.notify(guild_id);
+    // advance_queue runs in the End event handler and persists then; nothing
+    // to do here.
     Ok(())
 }
 
@@ -373,6 +436,7 @@ pub async fn clear(state: &Arc<AppStateInner>, guild_id: GuildId) -> anyhow::Res
     guard.queue.clear();
     drop(guard);
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     Ok(())
 }
 
@@ -391,6 +455,7 @@ pub async fn remove_tracks(
     let removed = before - guard.queue.len();
     drop(guard);
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     Ok(removed)
 }
 
@@ -412,6 +477,7 @@ pub async fn move_tracks_up(
     }
     drop(guard);
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     Ok(())
 }
 
@@ -436,6 +502,7 @@ pub async fn move_tracks_down(
     }
     drop(guard);
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     Ok(())
 }
 
@@ -457,6 +524,7 @@ pub async fn leave(state: &Arc<AppStateInner>, guild_id: GuildId) -> anyhow::Res
             .context("Failed to leave voice channel")?;
     }
     state.music.notify(guild_id);
+    persist_queue(state, guild_id).await;
     Ok(())
 }
 

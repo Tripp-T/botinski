@@ -2,6 +2,7 @@
 //! rest of the module clamps against.
 
 use poise::serenity_prelude::UserId;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -9,14 +10,13 @@ pub const DEFAULT_VOLUME: f32 = 1.0;
 /// Hard absolute ceiling for `set_volume`. Per-guild config can lower this further.
 pub const MAX_VOLUME: f32 = 2.0;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Track {
     pub id: Uuid,
     pub title: String,
     pub url: String,
     pub duration: Option<Duration>,
     pub requested_by_name: String,
-    #[allow(dead_code)]
     pub requested_by_id: UserId,
     pub is_live: bool,
 }

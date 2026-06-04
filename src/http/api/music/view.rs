@@ -193,7 +193,9 @@ pub(super) fn render_state(view: MusicView<'_>) -> Markup {
                 @if is_admin {
                     (btn_primary(icon_skip(), "Skip", format!("/api/guilds/{g}/music/skip")))
                     (btn_danger(icon_trash(), "Clear queue", format!("/api/guilds/{g}/music/clear")))
-                    (btn_danger(icon_power(), "Disconnect", format!("/api/guilds/{g}/music/leave")))
+                    @if connected {
+                        (btn_danger(icon_power(), "Disconnect", format!("/api/guilds/{g}/music/leave")))
+                    }
                 }
                 @if is_admin {
                     div class="flex items-center gap-2 ml-auto shrink-0" {

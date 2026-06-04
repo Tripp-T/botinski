@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT tracks FROM guild_queue WHERE guild_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "tracks",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "69c818befd5e10ef18cbf36a86585d6afd2b6090ad1b104db9bfa026757b8214"
+}

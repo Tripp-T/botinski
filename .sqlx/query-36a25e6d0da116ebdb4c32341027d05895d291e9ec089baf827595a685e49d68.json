@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO guild_queue (guild_id, tracks) VALUES (?, ?) ON CONFLICT(guild_id) DO UPDATE SET tracks = excluded.tracks",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "36a25e6d0da116ebdb4c32341027d05895d291e9ec089baf827595a685e49d68"
+}
