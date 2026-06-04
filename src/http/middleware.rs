@@ -36,11 +36,13 @@ pub async fn middleware_error_formatting(
 
 #[debug_middleware]
 pub async fn middleware_http_trace(req: Request, next: Next) -> Response {
+    let method = req.method().clone();
     let path = req.uri().path().to_string();
     let start_time = Instant::now();
 
     let span = info_span!(
         "http_request",
+        method = %method,
         path = %path,
         status_code = tracing::field::Empty,
         ms_elapsed = tracing::field::Empty,
