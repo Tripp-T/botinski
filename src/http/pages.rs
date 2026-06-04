@@ -2,11 +2,14 @@ use crate::{AppState, http::HttpError, http::templates::TemplateBase};
 use axum::{Router, debug_handler, extract::State, routing::get};
 
 mod admin;
+mod channels;
 mod guilds;
 mod index;
+mod members;
 mod music;
 mod overview;
 mod profile;
+mod roles;
 mod settings;
 
 #[debug_handler]
@@ -24,6 +27,15 @@ pub fn pages_router(_state: &AppState) -> Router<AppState> {
         .route(
             "/guilds/{guild_id}/settings",
             get(settings::page_guild_settings),
+        )
+        .route(
+            "/guilds/{guild_id}/channels",
+            get(channels::page_guild_channels),
+        )
+        .route("/guilds/{guild_id}/roles", get(roles::page_guild_roles))
+        .route(
+            "/guilds/{guild_id}/members",
+            get(members::page_guild_members),
         )
         .route("/admin/audit-log", get(admin::page_audit_log))
 }

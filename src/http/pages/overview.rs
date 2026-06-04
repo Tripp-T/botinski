@@ -78,10 +78,10 @@ pub(super) async fn page_guild_overview(
 
             // Quick stats grid
             div class="grid grid-cols-2 sm:grid-cols-4 gap-3" {
-                (stat_card("Members", &snapshot.member_count.to_string()))
-                (stat_card("Text channels", &snapshot.text_channels.to_string()))
-                (stat_card("Voice channels", &snapshot.voice_channels.to_string()))
-                (stat_card("Roles", &snapshot.roles.to_string()))
+                (stat_link("Members", &snapshot.member_count.to_string(), &format!("/guilds/{}/members", guild_id.get())))
+                (stat_link("Text channels", &snapshot.text_channels.to_string(), &format!("/guilds/{}/channels", guild_id.get())))
+                (stat_link("Voice channels", &snapshot.voice_channels.to_string(), &format!("/guilds/{}/channels", guild_id.get())))
+                (stat_link("Roles", &snapshot.roles.to_string(), &format!("/guilds/{}/roles", guild_id.get())))
             }
 
             // Music summary
@@ -153,10 +153,12 @@ struct GuildSnapshot {
     users_in_voice: usize,
 }
 
-fn stat_card(label: &str, value: &str) -> Markup {
+fn stat_link(label: &str, value: &str, href: &str) -> Markup {
     html! {
-        div class="rounded-lg bg-gray-900/60 border border-gray-800 p-3" {
-            div class="text-xs uppercase tracking-wider text-gray-500" { (label) }
+        a hx-boost="true"
+            href=(href)
+            class="rounded-lg bg-gray-900/60 border border-gray-800 hover:border-gray-700 hover:bg-gray-900 p-3 transition-colors group" {
+            div class="text-xs uppercase tracking-wider text-gray-500 group-hover:text-gray-400" { (label) }
             div class="text-xl font-semibold text-gray-50 mt-1 font-mono" { (value) }
         }
     }
