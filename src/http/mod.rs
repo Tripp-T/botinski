@@ -2,7 +2,7 @@ use crate::{
     AppState, Opts,
     http::{
         api::api_router,
-        middleware::{middleware_error_formatting, middleware_http_trace},
+        middleware::{middleware_audit_log, middleware_error_formatting, middleware_http_trace},
         pages::{page_not_found, pages_router},
     },
 };
@@ -71,6 +71,10 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
                     .layer(axum::middleware::from_fn_with_state(
                         state.clone(),
                         middleware_error_formatting,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.clone(),
+                        middleware_audit_log,
                     )),
             )
             .layer(Extension(cookie_key))

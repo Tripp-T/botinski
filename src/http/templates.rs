@@ -1,5 +1,9 @@
 use {
-    crate::{AppState, http::HttpError, models::user::AppUser},
+    crate::{
+        AppState,
+        http::HttpError,
+        models::{user::AppUser, user_role::AppUserRole},
+    },
     axum::{RequestPartsExt, extract::FromRequestParts, response::Html},
     maud::{Markup, html},
     tower_cookies::Cookies,
@@ -12,6 +16,7 @@ pub struct TemplateBase {
     dark_theme: bool,
     title: Option<String>,
     user: Option<AppUser>,
+    is_global_admin: bool,
 }
 impl TemplateBase {
     pub fn set_title<S: AsRef<str>>(mut self, title: S) -> Self {
@@ -61,7 +66,10 @@ impl TemplateBase {
                                     (nav_link("Guilds", "/guilds", NavLinkProps::default()))
                                 }
                             }
-                            div class="ml-auto" {
+                            div class="ml-auto flex items-center gap-1" {
+                                @if self.is_global_admin {
+                                    (nav_link("Admin", "/admin/audit-log", NavLinkProps::default()))
+                                }
                                 @if self.user.is_some() {
                                     (nav_link("Profile", "/profile", NavLinkProps::default()))
                                 } @else {
@@ -95,6 +103,11 @@ impl FromRequestParts<AppState> for TemplateBase {
             Err(HttpError::Unauthorized) => None,
             Err(e) => return Err(e),
         };
+        // RoleCache makes the AppUserRole extraction effectively free here.
+        let is_global_admin = matches!(
+            parts.extract_with_state::<AppUserRole, _>(state).await,
+            Ok(AppUserRole::GlobalAdmin)
+        );
         let dark_theme = cookies
             .get("dark_theme")
             .map(|mut cookie| match cookie.value().parse::<bool>() {
@@ -112,6 +125,7 @@ impl FromRequestParts<AppState> for TemplateBase {
             dark_theme,
             title: None,
             user,
+            is_global_admin,
         })
     }
 }

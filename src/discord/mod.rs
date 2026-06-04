@@ -74,6 +74,7 @@ pub async fn main(state: AppState, opts: Arc<Opts>) -> Result<()> {
                 Box::pin(event_handler(ctx, event, framework, data))
             },
             on_error: |error| Box::pin(on_framework_error(error)),
+            post_command: |ctx| Box::pin(log_command_invocation(ctx, "ok")),
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
@@ -196,6 +197,7 @@ async fn on_framework_error(error: poise::FrameworkError<'_, AppState, Error>) {
     use poise::FrameworkError::*;
     match error {
         CommandCheckFailed { ctx, .. } => {
+            log_command_invocation(ctx, "err:check_failed").await;
             let _ = ctx.reply("Permission denied").await;
         }
         other => {
@@ -203,5 +205,31 @@ async fn on_framework_error(error: poise::FrameworkError<'_, AppState, Error>) {
                 tracing::error!("Error handler itself failed: {e}");
             }
         }
+    }
+}
+
+/// Persist a single slash-command invocation to the audit log. Failures here
+/// are logged but never block the command flow.
+async fn log_command_invocation(ctx: poise::Context<'_, AppState, Error>, outcome: &str) {
+    use crate::models::audit_log::{AuditLogEntry, NewAuditLogEntry};
+    let action = format!("cmd:{}", ctx.command().qualified_name);
+    let author = ctx.author();
+    let actor_id = author.id.get().to_string();
+    let actor_name = author.name.clone();
+    let guild_id = ctx.guild_id().map(|g| g.get().to_string());
+    let detail = ctx.invocation_string();
+
+    let entry = NewAuditLogEntry {
+        source: "discord",
+        actor_id: Some(&actor_id),
+        actor_name: Some(&actor_name),
+        guild_id: guild_id.as_deref(),
+        action: &action,
+        detail: Some(detail.as_ref()),
+        outcome,
+    };
+
+    if let Err(e) = AuditLogEntry::insert(&ctx.data().db, entry).await {
+        tracing::warn!("audit log: failed to record command {}: {e}", action);
     }
 }

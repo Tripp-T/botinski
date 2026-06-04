@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id AS \"id!: i64\",\n                occurred_at AS \"occurred_at: DateTime<Utc>\",\n                source,\n                actor_id,\n                actor_name,\n                guild_id,\n                action,\n                detail,\n                outcome\n            FROM audit_log\n            ORDER BY occurred_at DESC\n            LIMIT ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "occurred_at: DateTime<Utc>",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "source",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "actor_id",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "actor_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "guild_id",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "action",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "detail",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "outcome",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "2c51307f6b7d068d0a20bff61ca2531780ad7ea35477261cf7ba7bee1bea0178"
+}

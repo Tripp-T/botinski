@@ -1,9 +1,11 @@
 use crate::{AppState, http::HttpError, http::templates::TemplateBase};
 use axum::{Router, debug_handler, extract::State, routing::get};
 
+mod admin;
 mod guilds;
 mod index;
 mod music;
+mod overview;
 mod profile;
 mod settings;
 
@@ -17,10 +19,11 @@ pub fn pages_router(_state: &AppState) -> Router<AppState> {
         .route("/", get(index::page_index))
         .route("/profile", get(profile::page_profile))
         .route("/guilds", get(guilds::page_guilds))
-        .route("/guilds/{guild_id}", get(guilds::page_guild_admin))
+        .route("/guilds/{guild_id}", get(overview::page_guild_overview))
         .route("/guilds/{guild_id}/music", get(music::page_guild_music))
         .route(
             "/guilds/{guild_id}/settings",
             get(settings::page_guild_settings),
         )
+        .route("/admin/audit-log", get(admin::page_audit_log))
 }
